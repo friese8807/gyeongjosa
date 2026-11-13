@@ -1,0 +1,1163 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>경조사 기록장</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="경조사">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f4f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121417" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180-v1.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192-v1.png">
+<link rel="manifest" href="manifest.webmanifest?v=1">
+<style>
+/* ═══ app-kit.css — 모바일 웹앱 공통 (화면 채우기 · 로딩 · 스와이프 · 시트) ═══
+   색은 :root 의 토큰만 바꿔서 앱마다 맞춘다. --solid 는 탭바/하단 띠 색이며 html 배경과 같아야 한다. */
+:root{
+  --bg:#f3f5f8; --solid:#ffffff; --ink:#12151c; --muted:#6b7280; --line:rgba(18,21,28,.10);
+  --accent:#3b6cf6; --danger:#e5484d;
+  --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+  --sal:env(safe-area-inset-left,0px); --sar:env(safe-area-inset-right,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#10141b; --solid:#171c25; --ink:#f2f4f8; --muted:#9aa3b2; --line:rgba(255,255,255,.12); color-scheme:dark; }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+
+/* ── 1. 화면 채우기 (위아래 공백 제거) ──
+   · html 배경 = 하단 띠 색(--solid): 아이폰이 그리지 않는 맨 아래 칸이 탭바와 이어져 보인다.
+   · 문서는 스크롤하지 않고(#sc 만 스크롤) 탭바는 fixed 가 아닌 flex 맨 아래 칸에 둔다.
+   · --app-h 는 app-kit.js 의 fixViewport() 가 실제 화면 높이로 넣어 준다. */
+html{height:100%;background:var(--solid);overflow:hidden}
+body{margin:0;height:var(--app-h,100%);overflow:hidden;display:flex;flex-direction:column;
+  background:var(--bg);color:var(--ink);overscroll-behavior:none;-webkit-text-size-adjust:100%;
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+.ak-top{flex:none;display:flex;align-items:center;gap:8px;background:var(--bg);
+  padding:calc(8px + var(--sat)) max(16px,var(--sar)) 8px max(16px,var(--sal))}
+.ak-top h1{flex:1;margin:0;font-size:20px;font-weight:800}
+#sc{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;
+  padding:4px max(16px,var(--sar)) 20px max(16px,var(--sal))}
+.ak-tabs{flex:none;display:flex;background:var(--solid);border-top:1px solid var(--line);
+  padding:6px max(8px,var(--sar)) max(6px,calc(var(--sab) - 14px)) max(8px,var(--sal))}
+.ak-tabs button{flex:1;border:0;background:none;font:inherit;font-size:11px;font-weight:600;color:var(--muted);
+  padding:6px 0;display:grid;gap:2px;justify-items:center;cursor:pointer}
+.ak-tabs button .i{font-size:20px;line-height:1}
+.ak-tabs button.on{color:var(--accent)}
+/* 아이폰은 16px 보다 작은 입력칸을 누르면 화면을 확대한다 */
+input,select,textarea{font-size:16px}
+button{touch-action:manipulation}
+
+/* ── 2. 로딩 ── */
+/* 2-1 첫 화면: JS 가 뜨기 전부터 보이는 아이콘 + 문구 */
+.ak-boot{position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:var(--bg);text-align:center;transition:opacity .25s}
+.ak-boot.out{opacity:0;pointer-events:none}
+.ak-boot img{width:84px;height:84px;border-radius:20px;animation:ak-breathe 1.6s ease-in-out infinite}
+.ak-boot p{margin:14px 0 0;color:var(--muted);font-size:14px}
+@keyframes ak-breathe{50%{transform:scale(.94);opacity:.75}}
+/* 2-2 누른 동작 처리 중: 위쪽 진행 막대 + 알약 + 누른 버튼 스피너 */
+.ak-bar{position:fixed;left:0;right:0;top:0;height:3px;z-index:60;pointer-events:none;opacity:0;transition:opacity .2s;overflow:hidden;
+  background:color-mix(in srgb,var(--accent) 18%,transparent)}
+.ak-bar.on{opacity:1}
+.ak-bar::before{content:"";position:absolute;top:0;bottom:0;width:40%;left:-40%;border-radius:3px;background:var(--accent);animation:ak-bar 1.1s ease-in-out infinite}
+@keyframes ak-bar{to{left:100%}}
+.ak-pill,.ak-toast{position:fixed;left:50%;bottom:calc(84px + var(--sab));z-index:61;transform:translate(-50%,12px);opacity:0;pointer-events:none;
+  transition:opacity .2s,transform .2s;background:var(--ink);color:var(--bg);font-size:13.5px;font-weight:600;
+  padding:9px 16px;border-radius:999px;white-space:nowrap;max-width:calc(100vw - 32px);overflow:hidden;text-overflow:ellipsis;
+  box-shadow:0 6px 24px rgba(0,0,0,.22)}
+.ak-pill{display:flex;align-items:center;gap:8px}
+.ak-pill.on,.ak-toast.on{opacity:1;transform:translate(-50%,0)}
+.ak-pill.top{top:calc(14px + var(--sat));bottom:auto}
+.ak-pill .e{display:inline-block;animation:ak-hop .5s ease-in-out infinite alternate}
+@keyframes ak-hop{from{transform:translateY(0) rotate(-6deg)}to{transform:translateY(-4px) rotate(6deg)}}
+.ak-pill .d i{display:inline-block;width:4px;height:4px;margin-left:3px;border-radius:50%;background:currentColor;animation:ak-dot 1.2s infinite}
+.ak-pill .d i:nth-child(2){animation-delay:.2s}.ak-pill .d i:nth-child(3){animation-delay:.4s}
+@keyframes ak-dot{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.is-busy{position:relative;pointer-events:none;opacity:.6}
+.is-busy::after{content:"";position:absolute;right:12px;top:50%;width:16px;height:16px;margin-top:-8px;border-radius:50%;
+  border:2px solid currentColor;border-right-color:transparent;animation:ak-spin .7s linear infinite}
+/* 2-3 배경 새로고침: 새로고침 아이콘만 돈다 */
+.ak-icon-btn{border:0;background:none;color:inherit;font-size:20px;width:40px;height:40px;border-radius:50%;cursor:pointer}
+.ak-spin{animation:ak-spin .8s linear infinite}
+@keyframes ak-spin{to{transform:rotate(360deg)}}
+
+/* ── 3. 스와이프 ── */
+.ak-in-l{animation:ak-in-l .22s ease-out}.ak-in-r{animation:ak-in-r .22s ease-out}
+@keyframes ak-in-l{from{transform:translateX(28px);opacity:0}}
+@keyframes ak-in-r{from{transform:translateX(-28px);opacity:0}}
+.ak-hscroll{overflow-x:auto;scrollbar-width:none;touch-action:pan-x;overscroll-behavior:contain}
+.ak-hscroll::-webkit-scrollbar{display:none}
+
+/* ── 4. 바텀시트 (끌어서 열고 닫기) ── */
+.ak-scrim{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s}
+.ak-scrim.on{opacity:1;pointer-events:auto}
+.ak-sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;max-height:88%;max-width:560px;margin:0 auto;display:flex;flex-direction:column;
+  background:var(--solid);border-radius:22px 22px 0 0;transform:translateY(105%);transition:transform .3s cubic-bezier(.2,.8,.2,1);
+  padding:0 max(18px,var(--sar)) calc(18px + var(--sab)) max(18px,var(--sal))}
+.ak-sheet.on{transform:translateY(0)}
+.ak-sheet.dragging{transition:none}
+/* 시트 아래로 같은 색을 이어 붙여 아이폰 하단 틈을 가린다 */
+.ak-sheet::after{content:"";position:absolute;left:0;right:0;top:calc(100% - 1px);height:200px;background:var(--solid)}
+.ak-grab{flex:none;padding:8px 0 12px;touch-action:none;cursor:grab}
+.ak-grab::before{content:"";display:block;width:40px;height:5px;border-radius:9px;margin:0 auto;background:color-mix(in srgb,var(--ink) 18%,transparent)}
+.ak-sheet .body{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+
+@media (prefers-reduced-motion:reduce){
+  .ak-bar::before,.ak-pill .e,.ak-pill .d i,.is-busy::after,.ak-spin,.ak-boot img{animation-duration:2.5s}
+  .ak-in-l,.ak-in-r{animation:none}.ak-sheet,.ak-scrim{transition:none}
+}
+
+/* ── 5. 상태·오류·예시 표시 ── */
+/* 숫자는 자릿수가 흔들리지 않게 */
+.num{font-variant-numeric:tabular-nums}
+/* 갱신 상태: <span class="ak-status"><i class="ak-dot live"></i>14:32 갱신</span> */
+.ak-status{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.ak-dot{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.ak-dot.live{background:#22c55e;animation:ak-pulse 1.8s infinite}
+.ak-dot.off{background:var(--danger)}
+@keyframes ak-pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}70%{box-shadow:0 0 0 6px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+/* 예시 데이터로 보는 중 */
+.ak-demo{flex:none;background:var(--ink);color:var(--bg);text-align:center;font-size:12.5px;padding:calc(6px + var(--sat)) 6px 6px}
+.ak-demo:not([hidden]) + .ak-top{padding-top:8px}
+/* 앱 오류 */
+.ak-err{flex:none;background:var(--danger);color:#fff;font-size:12.5px;line-height:1.4;padding:calc(6px + var(--sat)) 12px 6px;overflow-wrap:anywhere}
+/* 빈 화면·불러오기 실패 */
+.ak-empty{text-align:center;color:var(--muted);font-size:14px;line-height:1.6;padding:36px 16px}
+.ak-empty button{margin-top:12px;border:1px solid var(--line);background:var(--solid);color:var(--ink);font:inherit;font-weight:600;border-radius:10px;padding:8px 16px}
+/* 선 아이콘: <svg class="ak-ic" viewBox="0 0 24 24"><path …/></svg> — 글자색을 따라간다 */
+.ak-ic{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+@media (prefers-reduced-motion:reduce){.ak-dot.live{animation:none}}
+/* ── 이 앱의 색 ──
+   보낸 돈 = 붉은 주황(나간 돈), 받은 돈 = 파랑(들어온 돈), 강조색 = 초록.
+   설정에서 화면을 직접 고르면 html[data-theme] 가 붙어 시스템 설정보다 우선한다. */
+:root{
+  --bg:#f4f5f2; --solid:#ffffff; --ink:#1b1e22; --muted:#6c7077; --line:rgba(27,30,34,.10); --soft:#eceee9;
+  --give:#d4511e; --give-soft:#fbe9e1; --recv:#1f66b3; --recv-soft:#e3eefa;
+  --accent:#23705e; --accent-soft:#e1efea; --danger:#c93a3a;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --bg:#121417; --solid:#1b1e23; --ink:#eef0f2; --muted:#9a9fa7; --line:rgba(255,255,255,.11); --soft:#262a30;
+  --give:#ff8a5c; --give-soft:#3a2219; --recv:#6fb0f5; --recv-soft:#1a2b40;
+  --accent:#5fc3a7; --accent-soft:#1b332d; --danger:#ef7b7b; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#121417; --solid:#1b1e23; --ink:#eef0f2; --muted:#9a9fa7; --line:rgba(255,255,255,.11); --soft:#262a30;
+  --give:#ff8a5c; --give-soft:#3a2219; --recv:#6fb0f5; --recv-soft:#1a2b40;
+  --accent:#5fc3a7; --accent-soft:#1b332d; --danger:#ef7b7b; color-scheme:dark }
+:root[data-theme="light"]{color-scheme:light}
+
+/* ── 공통 조각 ── */
+.ak-top{min-height:56px}
+.ak-top .ttl{flex:1;margin:0;font-size:19px;font-weight:800}
+.seg{display:flex;background:var(--soft);border-radius:11px;padding:3px;gap:2px}
+.seg button{flex:1;border:0;background:none;font:inherit;font-size:14.5px;font-weight:600;color:var(--muted);padding:7px 14px;border-radius:9px;cursor:pointer;white-space:nowrap;min-height:36px}
+.seg button.on{background:var(--solid);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.seg.wide{width:100%}
+.top-mid{flex:1;display:flex;justify-content:center}
+.icbtn{border:0;background:none;color:var(--ink);width:44px;height:44px;border-radius:12px;display:grid;place-items:center;cursor:pointer;flex:none}
+.icbtn.on{background:var(--accent-soft);color:var(--accent)}
+.give{color:var(--give)} .recv{color:var(--recv)}
+.muted{color:var(--muted)}
+.amt{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.search{display:flex;align-items:center;gap:8px;background:var(--soft);border-radius:12px;padding:0 12px;margin:10px 0 6px;color:var(--muted)}
+.search input{flex:1;border:0;background:none;color:var(--ink);padding:11px 0;outline:none;min-width:0}
+.search button{border:0;background:none;color:var(--muted);font:inherit;padding:6px}
+.chip-x{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);color:var(--accent);border:0;font:inherit;font-size:13px;font-weight:600;border-radius:999px;padding:6px 12px;margin:4px 0;cursor:pointer}
+.mh{display:flex;justify-content:space-between;align-items:baseline;padding:16px 2px 6px;font-size:14px}
+.mh b{font-weight:700}
+.mh span{color:var(--muted);font-size:12.5px}
+.tag{color:var(--muted);font-size:12.5px}
+.empty{text-align:center;color:var(--muted);padding:40px 12px;line-height:1.7}
+.empty b{display:block;color:var(--ink);font-size:16px;margin-bottom:4px}
+.btn{display:block;width:100%;border:0;border-radius:13px;background:var(--accent);color:#fff;font:inherit;font-size:16px;font-weight:700;padding:14px;cursor:pointer;min-height:48px}
+.btn.ghost{background:var(--soft);color:var(--ink)}
+.btn.danger{background:none;color:var(--danger);border:1px solid var(--line)}
+.btn:disabled{opacity:.5}
+.btns{display:flex;gap:10px;margin-top:18px}
+.btns .btn{flex:1}
+.diag{color:var(--muted);font-size:11px;line-height:1.5;margin-top:16px;overflow-wrap:anywhere}
+
+/* ── 내역 A: 장부형 ── */
+.sumA{display:grid;grid-template-columns:1fr 1fr;background:var(--solid);border:1px solid var(--line);border-radius:16px;padding:14px 4px;margin-top:4px}
+.sumA div{text-align:center}
+.sumA div+div{border-left:1px solid var(--line)}
+.sumA small{display:block;font-size:13px;color:var(--muted)}
+.sumA .amt{font-size:21px}
+.rowsA{background:var(--solid);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.rowA{display:grid;grid-template-columns:48px 1fr auto;gap:12px;align-items:center;width:100%;border:0;background:none;color:inherit;font:inherit;text-align:left;padding:12px 14px;cursor:pointer}
+.rowA+.rowA{border-top:1px solid var(--line)}
+.dbox{width:48px;height:48px;border-radius:12px;display:grid;place-content:center;text-align:center;line-height:1.1}
+.dbox b{font-size:17px;font-weight:800}
+.dbox i{font-style:normal;font-size:11px;font-weight:600}
+.dbox.give{background:var(--give-soft)} .dbox.recv{background:var(--recv-soft)}
+.rowA .mid{min-width:0}
+.rowA .mid b{display:block;font-size:16px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rowA .end{text-align:right}
+.rowA .end small{display:block;font-size:13px;color:var(--muted)}
+.rowA .end .amt{font-size:16px}
+.soon{display:inline-block;font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:2px}
+
+/* ── 추가 ── */
+.form{display:grid;gap:18px;padding-top:6px}
+.fl{display:grid;gap:8px}
+.fl>label,.fl>.lb{font-size:13px;font-weight:700;color:var(--muted)}
+.inp{width:100%;border:1px solid var(--line);background:var(--solid);color:var(--ink);border-radius:12px;padding:12px 14px;font:inherit;font-size:16px;outline:none}
+.inp:focus{border-color:var(--accent)}
+textarea.inp{resize:vertical;min-height:70px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.dateBtn{display:flex;align-items:center;justify-content:space-between;width:100%;border:1px solid var(--line);background:var(--solid);color:var(--ink);border-radius:12px;padding:12px 14px;font:inherit;font-size:16px;font-weight:700;cursor:pointer}
+.chips{display:flex;gap:6px;padding-bottom:2px}
+.chips.wrap{flex-wrap:wrap}
+.chips button{flex:none;border:1px solid var(--line);background:var(--solid);color:var(--ink);font:inherit;font-size:14.5px;font-weight:600;border-radius:999px;padding:8px 14px;cursor:pointer;min-height:38px}
+.chips button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chips.amts button{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.hint{font-size:13px;color:var(--accent);background:var(--accent-soft);border-radius:10px;padding:8px 12px;line-height:1.5}
+.cal{background:var(--solid);border:1px solid var(--line);border-radius:14px;padding:10px}
+.cal .hd{display:flex;align-items:center;justify-content:space-between;padding:0 2px 6px}
+.cal .hd b{font-size:16px}
+.cal .g{display:grid;grid-template-columns:repeat(7,1fr);text-align:center}
+.cal .g span{font-size:12px;color:var(--muted);padding:4px 0}
+.cal .g button{border:0;background:none;color:var(--ink);font:inherit;font-size:16px;height:40px;border-radius:50%;cursor:pointer;font-variant-numeric:tabular-nums;position:relative}
+.cal .g button.t{color:var(--accent);font-weight:800}
+.cal .g button.on{background:var(--accent);color:#fff;font-weight:800}
+.cal .g button.has::after{content:"";position:absolute;left:50%;bottom:4px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--give)}
+.cal .g .sun{color:var(--give)}
+
+/* ── 상세 시트 ── */
+.det h2{margin:0;font-size:22px}
+.det .meta{color:var(--muted);margin:4px 0 14px;font-size:14px}
+.det dl{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;margin:0 0 6px;font-size:15px}
+.det dt{color:var(--muted)} .det dd{margin:0;overflow-wrap:anywhere}
+.det .big{font-size:26px;font-weight:800;margin:4px 0 12px}
+.det .hist{background:var(--soft);border-radius:12px;padding:10px 12px;font-size:14px;margin-top:10px}
+.det .hist div{display:flex;justify-content:space-between;padding:3px 0}
+
+/* ── 통계 ── */
+.yr{display:flex;align-items:center;justify-content:center;gap:10px;margin:6px 0 2px}
+.yr b{font-size:17px;min-width:70px;text-align:center}
+.chart{background:var(--solid);border:1px solid var(--line);border-radius:16px;padding:12px 8px 6px;margin:8px 0 12px}
+.chart svg{display:block;width:100%;height:auto}
+.chart text{fill:var(--muted);font-size:10px;font-family:inherit}
+.chart .v{fill:var(--ink);font-weight:700}
+.sch{background:var(--solid);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.sch>div{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 14px}
+.sch>div+div{border-top:1px solid var(--line)}
+.sch .d{font-weight:800;font-size:15px;min-width:64px}
+.sch .d small{display:block;font-weight:500;font-size:12px;color:var(--muted)}
+.sch .w{min-width:0}
+.sch .w b{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sch .w small{font-size:12.5px;color:var(--muted)}
+.dday{font-size:12.5px;font-weight:800;border-radius:8px;padding:4px 8px;white-space:nowrap}
+.dday.up{background:var(--accent);color:#fff}
+.dday.past{background:var(--soft);color:var(--muted)}
+.msg{border:1px solid var(--recv);color:var(--recv);background:none;font:inherit;font-size:12.5px;font-weight:700;border-radius:999px;padding:5px 10px;cursor:pointer;white-space:nowrap}
+.sec{font-size:13px;font-weight:700;color:var(--muted);margin:18px 2px 8px}
+.yrow{background:var(--solid);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:8px}
+.yrow .t{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.yrow .t b{font-size:16px}
+.yrow .t small{color:var(--muted);font-size:12.5px}
+.hb{display:grid;grid-template-columns:auto 1fr minmax(84px,auto);gap:10px;align-items:center;font-size:13px;margin:4px 0}
+.hb>span:first-child{white-space:nowrap;min-width:64px}
+.hb i{display:block;height:10px;border-radius:9px;background:var(--soft);overflow:hidden}
+.hb i em{display:block;height:100%;border-radius:9px}
+.hb.g em{background:var(--give)} .hb.r em{background:var(--recv)}
+.hb .amt{text-align:right;font-size:13.5px}
+
+/* ── 설정 ── */
+.grp{background:var(--solid);border:1px solid var(--line);border-radius:16px;margin-bottom:14px;overflow:hidden}
+.grp h3{margin:0;font-size:13px;color:var(--muted);font-weight:700;padding:12px 16px 4px}
+.item{display:flex;align-items:center;gap:12px;width:100%;border:0;background:none;color:inherit;font:inherit;text-align:left;padding:13px 16px;min-height:52px;cursor:pointer}
+.item+.item{border-top:1px solid var(--line)}
+.item .t{flex:1;min-width:0}
+.item .t b{display:block;font-weight:600;font-size:15.5px}
+.item .t small{display:block;color:var(--muted);font-size:12.5px;line-height:1.4;overflow-wrap:anywhere}
+.item .v{color:var(--muted);font-size:14px}
+.sw{width:50px;height:30px;border-radius:99px;background:var(--soft);position:relative;flex:none;transition:background .2s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
+.sw.on{background:var(--accent)} .sw.on::after{transform:translateX(20px)}
+.edit-chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
+.edit-chips span{display:inline-flex;align-items:center;gap:2px;background:var(--soft);border-radius:999px;padding:4px 4px 4px 12px;font-size:14px}
+.edit-chips span button{border:0;background:none;color:var(--muted);font-size:16px;width:28px;height:28px;border-radius:50%;cursor:pointer}
+.addrow{display:flex;gap:8px}
+.addrow .inp{flex:1}
+.addrow .btn{width:auto;padding:0 18px}
+
+/* ── 잠금 ── */
+#lock{position:fixed;inset:0;z-index:90;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:calc(20px + var(--sat)) 20px calc(20px + var(--sab))}
+#lock[hidden]{display:none}
+#lock h2{margin:0;font-size:18px}
+#lock .dots{display:flex;gap:14px}
+#lock .dots i{width:14px;height:14px;border-radius:50%;border:2px solid var(--ink)}
+#lock .dots i.f{background:var(--ink)}
+#lock .pad{display:grid;grid-template-columns:repeat(3,72px);gap:14px}
+#lock .pad button{height:72px;border-radius:50%;border:0;background:var(--soft);color:var(--ink);font:inherit;font-size:26px;font-weight:600;cursor:pointer}
+#lock .pad button.x{background:none;font-size:15px}
+#lock p{margin:0;min-height:20px;color:var(--danger);font-size:14px}
+.shake{animation:shake .35s}
+@keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+@media (prefers-reduced-motion:reduce){.shake{animation:none}.sw::after,.sw{transition:none}}
+</style>
+</head>
+<body>
+<div class="ak-demo" id="demo" hidden>예시 데이터예요 · 설정에서 구글 시트를 연결하면 내 기록이 보여요</div>
+<div class="ak-boot"><div><img src="icon-180-v1.png" alt=""><p>불러오는 중…</p></div></div>
+<header class="ak-top" id="top"></header>
+<main id="sc"></main>
+<nav class="ak-tabs" aria-label="메뉴">
+  <button type="button" data-tab="list"><svg class="ak-ic" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>내역</button>
+  <button type="button" data-tab="add"><svg class="ak-ic" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M12 8v8M8 12h8"/></svg>추가</button>
+  <button type="button" data-tab="stat"><svg class="ak-ic" viewBox="0 0 24 24"><path d="M5 20V11M12 20V5M19 20v-6"/></svg>통계</button>
+  <button type="button" data-tab="set"><svg class="ak-ic" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>설정</button>
+</nav>
+<div class="ak-sheet" id="sheet">
+  <div class="ak-grab"></div>
+  <div class="body" id="sheetBody"></div>
+</div>
+<div id="lock" hidden>
+  <h2>암호를 눌러 주세요</h2>
+  <div class="dots" id="lockDots"><i></i><i></i><i></i><i></i></div>
+  <p id="lockMsg"></p>
+  <div class="pad" id="lockPad"></div>
+</div>
+<input type="file" id="fileIn" accept=".csv,text/csv,text/plain" hidden>
+<script>
+/* ═══ app-kit.js — 모바일 웹앱 공통 동작 ═══
+   AppKit.fixViewport()            화면 높이 보정 (아이폰 홈 화면 앱 위아래 공백 제거)
+   AppKit.bootDone()               첫 로딩 화면 걷기
+   AppKit.track(promise, opts)     진행 막대 + 알약 + 누른 버튼 스피너
+   AppKit.wrap(fn, skip)           API 함수를 감싸 "방금 누른 동작"만 자동으로 진행 표시
+   AppKit.spin(el, promise)        새로고침 아이콘 돌리기 (배경 새로고침용)
+   AppKit.toast(msg)               짧은 알림
+   AppKit.swipe(el, {onNext,onPrev})  좌우 스와이프 (탭·날짜 넘기기)
+   AppKit.tabs({...})              탭바 + 스와이프 + 넘김 애니메이션
+   AppKit.sheet(el)                바텀시트 열기/닫기 + 끌어내려 닫기
+   AppKit.autoUpdate(build)        version.txt 가 바뀌면 새 버전으로 다시 열기
+   AppKit.env()                    진단 문구 (버전·홈 화면 앱 여부·화면 크기)
+   AppKit.store('앱접두어')         localStorage 를 안전하게 (get/set/del)
+   AppKit.esc / num / krw / signed / kstDate / addDays / hhmm   글자·숫자·날짜
+   AppKit.poll(fn, ms, busy)       화면이 보일 때만 자동 새로고침 + 돌아오면 즉시
+   AppKit.editing(view)            입력 중인지 (배경 새로고침이 입력값을 지우지 않게)
+   AppKit.sequence()               늦게 온 예전 응답 버리기
+   AppKit.showErrors(build)        앱 오류를 화면에 표시
+   AppKit.sure(btn)                두 번 눌러야 지워지는 버튼
+   AppKit.copy(text) / buzz()      복사 · 진동
+   AppKit.toJpeg(file, maxSide)    사진 줄여서 올리기
+   AppKit.device()                 접속 기록용 기기·방식 */
+const AppKit = (() => {
+  const $ = s => typeof s === 'string' ? document.querySelector(s) : s;
+  const root = document.documentElement;
+  const standalone = () => !!navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+
+  /* ── 1. 화면 높이 ──
+     아이폰 홈 화면 앱은 웹 화면(innerHeight)을 실제 화면보다 짧게 잡을 때가 있다.
+     그 차이(gap)만큼 문서 높이를 늘려 맨 아래 빈 띠를 없앤다. 가로 모드·브라우저에서는 보정하지 않는다. */
+  let gap = 0;
+  function fixViewport() {
+    const set = () => {
+      const portraitH = Math.max(screen.height, screen.width);
+      const raw = innerHeight < innerWidth ? 0 : portraitH - innerHeight;
+      gap = standalone() && raw > 0 && raw < 160 ? raw : 0;
+      root.style.setProperty('--app-h', (innerHeight + gap) + 'px');
+      root.classList.toggle('standalone', standalone());
+    };
+    set();
+    addEventListener('resize', set);
+    addEventListener('orientationchange', () => setTimeout(set, 300));
+  }
+
+  /* ── 2. 로딩 ── */
+  function bootDone() { const b = $('.ak-boot'); if (!b) return; b.classList.add('out'); setTimeout(() => b.remove(), 300); }
+
+  let tapAt = 0, tapEl = null, busyN = 0, pillTm = 0, busyLabel = '잠깐만요, 처리 중이에요', busyEmoji = '⏳';
+  ['pointerdown', 'change'].forEach(t => document.addEventListener(t, e => {
+    tapAt = Date.now();
+    if (t === 'pointerdown') tapEl = e.target.closest?.('button,label,.btn,[role=button]') || null;
+  }, true));
+  function busyUI(on, label) {
+    let bar = $('.ak-bar'), pill = $('.ak-pill');
+    if (on) {
+      if (!bar) { bar = document.createElement('div'); bar.className = 'ak-bar'; document.body.appendChild(bar); }
+      if (!pill) { pill = document.createElement('div'); pill.className = 'ak-pill'; pill.setAttribute('role', 'status'); document.body.appendChild(pill); }
+      pill.innerHTML = `<span class="e">${busyEmoji}</span><span></span><span class="d"><i></i><i></i><i></i></span>`;
+      pill.children[1].textContent = label || busyLabel;
+      pill.classList.toggle('top', !!$('.ak-sheet.on'));           // 시트가 열려 있으면 버튼을 가리지 않게 위로
+      requestAnimationFrame(() => bar.classList.add('on'));
+      clearTimeout(pillTm); pillTm = setTimeout(() => pill.classList.add('on'), 350);   // 금방 끝나면 알약은 안 띄움
+    } else {
+      clearTimeout(pillTm); bar?.classList.remove('on'); pill?.classList.remove('on');
+      document.querySelectorAll('.is-busy').forEach(x => x.classList.remove('is-busy'));
+    }
+  }
+  function track(p, { el, label } = {}) {
+    busyN++; const b = $(el) || tapEl; if (b && document.contains(b)) b.classList.add('is-busy'); busyUI(true, label);
+    const done = () => { if (--busyN <= 0) { busyN = 0; busyUI(false); } };
+    p.then(done, done); return p;
+  }
+  /* 사용자가 누른 지 1.5초 안에 시작된 요청만 표시한다. 배경 새로고침은 조용히. */
+  function wrap(fn, skip) {
+    return function (...a) {
+      const p = fn.apply(this, a);
+      if (Date.now() - tapAt > 1500 || (skip && skip(...a))) return p;
+      return track(p);
+    };
+  }
+  function spin(el, p) { el = $(el); el?.classList.add('ak-spin'); const off = () => el?.classList.remove('ak-spin'); p.then(off, off); return p; }
+  function setBusy({ label, emoji } = {}) { if (label) busyLabel = label; if (emoji) busyEmoji = emoji; }
+
+  let toastTm = 0;
+  function toast(msg, ms = 2400) {
+    let t = $('.ak-toast');
+    if (!t) { t = document.createElement('div'); t.className = 'ak-toast'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite'); document.body.appendChild(t); }
+    t.textContent = msg; requestAnimationFrame(() => t.classList.add('on'));
+    clearTimeout(toastTm); toastTm = setTimeout(() => t.classList.remove('on'), ms);
+  }
+
+  /* ── 3. 스와이프 ──
+     · 세로 스크롤과 헷갈리지 않게: 가로 이동이 세로의 1.5배 이상, 60px 이상, 0.7초 이내일 때만.
+     · 가로로 스크롤되는 영역·입력칸·지도·[data-noswipe] 안에서 시작하면 무시.
+     · 화면 왼쪽 끝 24px 에서 시작하면 무시 (사파리 뒤로 가기 동작과 겹침). */
+  function hScrollable(n, stop) {
+    for (; n && n !== stop && n.nodeType === 1; n = n.parentElement) {
+      if (n.matches('[data-noswipe],input,textarea,select,.ak-hscroll,.leaflet-container,canvas')) return true;
+      if (n.scrollWidth > n.clientWidth + 4 && /(auto|scroll)/.test(getComputedStyle(n).overflowX)) return true;
+    }
+    return false;
+  }
+  function swipe(el, { onNext, onPrev, min = 60 } = {}) {
+    el = $(el); let x0 = null, y0 = 0, t0 = 0;
+    el.addEventListener('touchstart', e => {
+      x0 = null; if (e.touches.length !== 1) return;
+      const t = e.touches[0]; if (t.clientX < 24 || hScrollable(e.target, el)) return;
+      x0 = t.clientX; y0 = t.clientY; t0 = Date.now();
+    }, { passive: true });
+    el.addEventListener('touchend', e => {
+      if (x0 == null) return; const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0; x0 = null;
+      if (Math.abs(dx) < min || Math.abs(dx) < Math.abs(dy) * 1.5 || Date.now() - t0 > 700) return;
+      (dx < 0 ? onNext : onPrev)?.();
+    }, { passive: true });
+    el.addEventListener('touchcancel', () => { x0 = null; }, { passive: true });
+  }
+  /* 탭바(.ak-tabs button[data-tab]) + 내용(render) + 스와이프를 한 번에 연결 */
+  function tabs({ bar = '.ak-tabs', view = '#sc', ids, start, render, remember = 'ak-tab' }) {
+    bar = $(bar); view = $(view);
+    let cur = start || ids[0];
+    try { const s = localStorage.getItem(remember); if (remember && ids.includes(s)) cur = s; } catch (e) {}
+    function go(id, dir) {
+      if (!ids.includes(id)) return;
+      if (dir == null) dir = Math.sign(ids.indexOf(id) - ids.indexOf(cur));
+      cur = id; try { remember && localStorage.setItem(remember, id); } catch (e) {}
+      bar?.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === id));
+      render(id); view.scrollTop = 0;
+      view.classList.remove('ak-in-l', 'ak-in-r');
+      if (dir) { void view.offsetWidth; view.classList.add(dir > 0 ? 'ak-in-l' : 'ak-in-r'); }
+    }
+    bar?.addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) go(b.dataset.tab); });
+    swipe(view, {
+      onNext: () => { const i = ids.indexOf(cur); if (i < ids.length - 1) go(ids[i + 1], 1); },
+      onPrev: () => { const i = ids.indexOf(cur); if (i > 0) go(ids[i - 1], -1); },
+    });
+    go(cur, 0);
+    return { go, get current() { return cur; } };
+  }
+
+  /* ── 4. 바텀시트 ── 손잡이(.ak-grab)를 끌어내리거나 바깥을 누르면 닫힌다 */
+  function sheet(el) {
+    el = $(el);
+    let scrim = el.previousElementSibling?.classList.contains('ak-scrim') ? el.previousElementSibling : null;
+    if (!scrim) { scrim = document.createElement('div'); scrim.className = 'ak-scrim'; el.before(scrim); }
+    const open = () => { el.style.transform = ''; el.classList.add('on'); scrim.classList.add('on'); };
+    const close = () => { el.style.transform = ''; el.classList.remove('on'); scrim.classList.remove('on'); };
+    scrim.addEventListener('click', close);
+    const g = el.querySelector('.ak-grab');
+    if (g) {
+      let y0 = null, moved = 0, t0 = 0;
+      g.addEventListener('pointerdown', e => { y0 = e.clientY; t0 = Date.now(); moved = 0; el.classList.add('dragging'); g.setPointerCapture(e.pointerId); });
+      g.addEventListener('pointermove', e => { if (y0 == null) return; moved = Math.max(0, e.clientY - y0); el.style.transform = `translateY(${moved}px)`; });
+      const up = () => {
+        if (y0 == null) return; y0 = null; el.classList.remove('dragging');
+        const v = moved / Math.max(1, Date.now() - t0);
+        if (moved > el.offsetHeight * .3 || v > .5) close(); else el.style.transform = '';
+      };
+      g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up);
+    }
+    return { open, close, get isOpen() { return el.classList.contains('on'); } };
+  }
+
+  /* ── 5. 새 버전 자동 열기 ──
+     휴대폰이 예전 화면을 붙잡고 있을 때: version.txt 숫자가 이 페이지의 build 와 다르면 ?v=숫자 로 다시 연다.
+     같은 버전으로 두 번 되돌지 않게 sessionStorage 에 기록한다. */
+  function autoUpdate(build, url = 'version.txt') {
+    const chk = () => fetch(url + '?t=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(v => {
+      v = (v || '').trim(); if (!/^[0-9]+$/.test(v) || v === String(build)) return;
+      try { if (sessionStorage.getItem('ak-up') === v) return; sessionStorage.setItem('ak-up', v); } catch (e) {}
+      location.replace(location.pathname + '?v=' + v + location.hash);
+    }).catch(() => {});
+    chk(); document.addEventListener('visibilitychange', () => { if (!document.hidden) chk(); });
+  }
+
+  /* ── 6. 진단 ── 화면 문제를 볼 때 설정 화면 맨 아래에 작게 보여 준다 */
+  function env(build) {
+    const p = document.createElement('div');
+    p.style.cssText = 'position:fixed;top:env(safe-area-inset-top);height:env(safe-area-inset-bottom);visibility:hidden';
+    document.body.appendChild(p); const cs = getComputedStyle(p), st = cs.top, sb = cs.height; p.remove();
+    return `버전 ${build ?? '-'} · ${standalone() ? '홈 화면 앱' : '브라우저'} · 화면 ${screen.width}×${screen.height} · 웹뷰 ${innerWidth}×${innerHeight} · 안전영역 위 ${st} 아래 ${sb} · 보정 ${gap}px`;
+  }
+
+  /* ── 7. 저장·글자·숫자 ── */
+  /* 저장소: 앱마다 접두어를 붙이고(같은 github.io 주소를 여러 앱이 함께 쓴다), 막혀 있어도 앱이 죽지 않게 try 로 감싼다 */
+  function store(prefix) {
+    const k = n => prefix + '.' + n;
+    return {
+      get(n, d) { try { const v = localStorage.getItem(k(n)); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+      set(n, v) { try { localStorage.setItem(k(n), JSON.stringify(v)); } catch (e) {} },
+      del(n) { try { localStorage.removeItem(k(n)); } catch (e) {} },
+    };
+  }
+  /* 서버·사용자 글자를 innerHTML 에 넣을 때는 반드시 esc() */
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const pad = n => String(n).padStart(2, '0');
+  const num = n => Math.round(n).toLocaleString('ko-KR');
+  const krw = n => (n < 0 ? '−' : '') + num(Math.abs(n)) + '원';
+  const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '') + num(Math.abs(n));
+  /* 날짜는 휴대폰 시간대와 상관없이 한국 시간 기준 YYYY-MM-DD */
+  const kstDate = (d = new Date()) => new Date(d.getTime() + 9 * 3600e3).toISOString().slice(0, 10);
+  const addDays = (s, n) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const hhmm = (d = new Date()) => pad(d.getHours()) + ':' + pad(d.getMinutes());
+
+  /* ── 8. 자동 새로고침 ──
+     화면이 보일 때만 ms 마다 fn 을 부르고, 다른 앱에 갔다 돌아오면 바로 한 번 부른다.
+     ms 를 함수로 주면 매번 간격을 다시 정한다(예: 장중 15초, 마감 뒤 2분). busy() 가 참이면 건너뛴다. */
+  function poll(fn, ms, busy) {
+    let tm = 0;
+    const next = () => { clearTimeout(tm); if (!document.hidden) tm = setTimeout(tick, typeof ms === 'function' ? ms() : ms); };
+    const tick = async () => { if (!document.hidden && !(busy && busy())) { try { await fn(); } catch (e) {} } next(); };
+    document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(tm); else tick(); });
+    next();
+    return { now: tick, stop: () => clearTimeout(tm) };
+  }
+  /* 사용자가 입력 중이거나 저장 안 한 값이 있으면 참 → 배경 새로고침이 화면을 다시 그려 입력값을 지우지 않게 */
+  function editing(view = '#sc') {
+    const v = $(view); if (!v) return false; const a = document.activeElement;
+    if (a && v.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return true;
+    return [...v.querySelectorAll('input,textarea')].some(i =>
+      i.type === 'checkbox' || i.type === 'radio' ? i.checked !== i.defaultChecked : i.type !== 'file' && i.value !== i.defaultValue);
+  }
+  /* 늦게 온 예전 응답 버리기:  const mine = seq.next();  …await…  if (!seq.is(mine)) return; */
+  function sequence() { let n = 0; return { next: () => ++n, is: v => v === n }; }
+
+  /* ── 9. 오류·확인 ── */
+  /* 앱 오류를 화면에 보여 준다(사용자가 캡처해서 알려 줄 수 있게). 다른 주소 스크립트의 'Script error.'(줄 번호 없음)는 무시 */
+  function showErrors(build) {
+    addEventListener('error', e => {
+      if (!e.lineno) return;
+      let b = $('.ak-err'); if (!b) { b = document.createElement('div'); b.className = 'ak-err'; document.body.prepend(b); }
+      b.textContent = `앱 오류: ${e.message || '알 수 없음'} (줄 ${e.lineno}${build ? ' · 버전 ' + build : ''})`;
+    });
+  }
+  /* 지우기처럼 되돌릴 수 없는 버튼: 처음 누르면 글자가 "정말 삭제"로 바뀌고, 한 번 더 눌러야 참 */
+  function sure(btn, label = '정말 삭제') {
+    if (btn.dataset.sure) return true;
+    const old = btn.textContent; btn.dataset.sure = '1'; btn.textContent = label;
+    setTimeout(() => { if (document.contains(btn)) { delete btn.dataset.sure; btn.textContent = old; } }, 3000);
+    return false;
+  }
+  async function copy(text) {
+    try { await navigator.clipboard.writeText(text); toast('복사했어요'); }
+    catch (e) { toast(text, 5000); }
+  }
+  const buzz = (ms = 12) => { try { navigator.vibrate?.(ms); } catch (e) {} };
+
+  /* ── 10. 사진 줄이기 ── 올리기 전에 긴 변 maxSide 로 줄인 JPEG(data URL). Apps Script·시트에 큰 사진을 그대로 보내지 않는다 */
+  async function toJpeg(file, maxSide = 1100, quality = .82) {
+    let img; try { img = await createImageBitmap(file); } catch (e) {
+      img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = URL.createObjectURL(file); });
+    }
+    const w = img.width || img.naturalWidth, h = img.height || img.naturalHeight, s = Math.min(1, maxSide / Math.max(w, h));
+    const c = document.createElement('canvas'); c.width = Math.round(w * s); c.height = Math.round(h * s);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', quality);
+  }
+
+  /* ── 11. 접속 정보 ── 서버 접속 기록용: 어떤 기기에서 어떤 방식으로 열었는지 */
+  function device() {
+    const u = navigator.userAgent || ''; let dev = '기타';
+    if (/iPhone/.test(u)) dev = 'iPhone'; else if (/iPad/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1)) dev = 'iPad';
+    else if (/Android/.test(u)) dev = 'Android'; else if (/Macintosh/.test(u)) dev = 'Mac'; else if (/Windows/.test(u)) dev = 'Windows';
+    const v = (u.match(/OS (\d+)[_.]/) || [])[1]; if (v && /iP/.test(dev)) dev += ' iOS ' + v;
+    let via = '브라우저';
+    try { if (new URLSearchParams(location.search).get('via') === 'widget') via = '위젯'; else if (standalone()) via = '홈화면 앱'; } catch (e) {}
+    return { dev, via };
+  }
+
+  return { fixViewport, bootDone, track, wrap, spin, setBusy, toast, swipe, tabs, sheet, autoUpdate, env, standalone,
+    store, esc, pad, num, krw, signed, kstDate, addDays, hhmm, poll, editing, sequence, showErrors, sure, copy, buzz, toJpeg, device };
+})();
+</script>
+<script>
+const BUILD = '1794563645';            // version.txt 와 같은 숫자 — scripts/bump_version.py 가 함께 바꾼다
+AppKit.fixViewport();
+AppKit.autoUpdate(BUILD);
+AppKit.showErrors(BUILD);
+const LS = AppKit.store('gyeongjosa');   // 저장소 접두어 — 같은 github.io 주소의 다른 앱과 섞이지 않게
+const { esc, num } = AppKit;
+const $ = s => document.querySelector(s);
+
+/* ── 설정 링크: …/#setup=<base64(JSON {url})> 로 열면 서버 주소를 저장하고 주소창에서 지운다 ── */
+(() => {
+  const m = location.hash.match(/^#setup=(.+)$/); if (!m) return;
+  try { const j = JSON.parse(decodeURIComponent(escape(atob(m[1])))); if (j.url) { const c = LS.get('cfg', {}); c.api = j.url; LS.set('cfg', c); } } catch (e) {}
+  history.replaceState(null, '', location.pathname + location.search);
+})();
+
+/* ── 기본 항목 (설정 › 항목 관리에서 바꿀 수 있다) ── */
+const DEF = {
+  who:  ['본인', '배우자', '자녀', '부친', '모친', '빙부', '빙모', '시부', '시모', '조부', '조모', '형제자매'],
+  type: ['결혼', '장례', '돌잔치', '출산', '생일', '칠순·팔순', '입학·졸업', '개업', '이사·집들이', '승진', '위문', '기타'],
+  grp:  ['회사', '거래처', '친구', '동창', '친척', '가족', '이웃', '지인'],
+  amt:  [10000, 30000, 50000, 100000],
+  tag:  ['현금', '계좌이체', '선물', '상품권', '화환', '답례품', '참석', '불참'],
+};
+const CFG = Object.assign({ api: '', theme: 'auto', pin: '', cal: true }, LS.get('cfg', {}));
+const saveCfg = () => LS.set('cfg', CFG);
+const DEMO = !CFG.api || location.hash === '#demo';
+
+/* ── 날짜 ── 한국 시간 기준 YYYY-MM-DD */
+const TODAY = AppKit.kstDate();
+const DOW = '일월화수목금토';
+const dow = d => DOW[new Date(d + 'T00:00:00Z').getUTCDay()];
+const dayDiff = (a, b) => Math.round((Date.parse(a + 'T00:00:00Z') - Date.parse(b + 'T00:00:00Z')) / 864e5);
+const md = d => `${+d.slice(5, 7)}월 ${+d.slice(8, 10)}일`;
+const ym = d => `${d.slice(0, 4)}년 ${+d.slice(5, 7)}월`;
+const won = n => num(n || 0) + '원';
+const man = n => n >= 10000 && n % 10000 === 0 ? num(n / 10000) + '만' : num(n);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const sum = a => a.reduce((s, r) => s + (+r.amount || 0), 0);
+const what = r => [r.who, r.type].filter(Boolean).join(' ');
+
+/* ── 예시 데이터 (서버 연결 전·#demo) ── 이름은 모두 지어낸 것 */
+function demoRecs() {
+  const R = (dir, date, name, who, type, grp, amount, tags, memo = '', phone = '') => ({ id: 'ex' + date + name, dir, date, name, who, type, grp, amount, tags, memo, phone, upd: 0 });
+  return [
+    R('give', '2026-12-05', '한지수', '본인', '결혼', '회사', 100000, ['계좌이체'], '강남 웨딩홀 낮 12시 30분', '010-2345-6789'),
+    R('give', '2026-11-22', '배준호', '자녀', '돌잔치', '친구', 50000, ['선물'], '아기 옷 선물'),
+    R('recv', '2026-11-02', '오세린', '본인', '승진', '회사', 50000, ['상품권'], '', '010-3456-7890'),
+    R('give', '2026-10-10', '문태영', '본인', '결혼', '회사', 100000, ['현금', '참석']),
+    R('give', '2026-10-10', '서가은', '본인', '결혼', '동창', 100000, ['현금', '참석']),
+    R('give', '2026-09-10', '노승우', '모친', '장례', '거래처', 100000, ['현금', '참석'], '서울성모병원 장례식장'),
+    R('give', '2026-07-23', '진도윤', '빙부', '장례', '회사', 100000, ['현금', '참석']),
+    R('give', '2026-07-19', '한지수', '부친', '칠순·팔순', '회사', 50000, ['계좌이체', '불참']),
+    R('recv', '2026-07-19', '장하람', '본인', '생일', '가족', 200000, ['현금']),
+    R('give', '2026-03-28', '유채원', '본인', '결혼', '친구', 100000, ['현금', '불참']),
+    R('recv', '2026-03-02', '배준호', '자녀', '입학·졸업', '친구', 100000, ['계좌이체'], '아들 대학 입학 축하'),
+    R('recv', '2026-03-02', '오세린', '자녀', '입학·졸업', '회사', 100000, ['계좌이체'], '아들 대학 입학 축하'),
+    R('give', '2026-02-28', '권나윤', '본인', '결혼', '동창', 100000, ['현금', '불참']),
+    R('give', '2025-12-21', '임재혁', '자녀', '결혼', '거래처', 100000, ['현금', '불참']),
+    R('recv', '2025-08-14', '문태영', '본인', '이사·집들이', '회사', 0, ['선물'], '세제 세트'),
+    R('give', '2025-05-17', '노승우', '본인', '개업', '거래처', 0, ['화환'], '개업 화환'),
+  ];
+}
+
+/* ── 상태 ── 화면은 render() 가 S 를 보고 다시 그린다 */
+const S = {
+  recs: DEMO ? demoRecs() : LS.get('recs', []),
+  cats: Object.assign({}, DEF, LS.get('cats', {})),
+  dir: LS.get('dir', 'all'), q: '', month: null,
+  statTab: LS.get('statTab', 'sched'), statType: 'all', year: +TODAY.slice(0, 4),
+  draft: null, calOpen: false, calM: TODAY.slice(0, 7), lastOk: null,
+};
+$('#demo').hidden = !DEMO;
+
+/* ── 화면 색 (자동·밝게·어둡게) ── */
+function applyTheme() {
+  const r = document.documentElement;
+  if (CFG.theme === 'auto') r.removeAttribute('data-theme'); else r.setAttribute('data-theme', CFG.theme);
+}
+applyTheme();
+
+/* ═══ 서버 (Apps Script + 구글 시트) ═══
+   fetch(text/plain) 를 먼저 쓰고, 아이폰 홈 화면 앱에서 막히면 JSONP 로 다시 시도한다. 성공한 방식을 기억한다. */
+function jsonp(params) {
+  return new Promise((res, rej) => {
+    const cb = 'gjs' + Date.now() + Math.floor(Math.random() * 1e4), s = document.createElement('script');
+    const tm = setTimeout(() => { cleanup(); rej(new Error('Load failed')); }, 20000);
+    const cleanup = () => { clearTimeout(tm); delete window[cb]; s.remove(); };
+    window[cb] = j => { cleanup(); res(j); };
+    s.onerror = () => { cleanup(); rej(new Error('Load failed')); };
+    s.src = CFG.api + (CFG.api.includes('?') ? '&' : '?') + 'callback=' + cb + '&p=' + encodeURIComponent(JSON.stringify(params));
+    document.head.appendChild(s);
+  });
+}
+let api = async (action, payload = {}) => {
+  if (DEMO) { await new Promise(r => setTimeout(r, 500)); return null; }
+  const body = { action, meta: AppKit.device(), ...payload };
+  let j, mode = LS.get('mode', 'fetch');
+  const viaFetch = async () => {
+    const r = await fetch(CFG.api, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
+    return r.json();
+  };
+  const small = JSON.stringify(body).length < 1500;   // JSONP 는 주소 길이 제한이 있어 작은 요청만
+  try { j = mode === 'jsonp' && small ? await jsonp(body) : await viaFetch(); }
+  catch (e) {
+    if (!small) throw e;
+    j = await (mode === 'jsonp' ? viaFetch() : jsonp(body));
+    LS.set('mode', mode === 'jsonp' ? 'fetch' : 'jsonp');
+  }
+  if (!j || !j.ok) throw Object.assign(new Error(j?.message || '처리하지 못했어요'), { code: j?.code });
+  return j.data;
+};
+api = AppKit.wrap(api, action => action === 'load');
+
+/* 오프라인 대기열: 저장·삭제는 화면에 먼저 반영하고, 서버에 못 보낸 것은 쌓아 두었다가 다시 보낸다 */
+const queue = () => LS.get('queue', []);
+function enqueue(op) { const q = queue().filter(x => (x.rec?.id || x.id) !== (op.rec?.id || op.id)); q.push(op); LS.set('queue', q); }
+let flushing = false;
+async function flush() {
+  if (DEMO || flushing || !queue().length) return;
+  flushing = true;
+  try {
+    for (const op of queue()) {
+      await api(op.op, op.op === 'save' ? { rec: op.rec, cal: CFG.cal } : { id: op.id });
+      LS.set('queue', queue().filter(x => x !== op && JSON.stringify(x) !== JSON.stringify(op)));
+    }
+  } catch (e) { setStatus(false); } finally { flushing = false; }
+}
+addEventListener('online', () => flush().then(refresh));
+
+function setStatus(ok) {
+  const dot = $('#dot'), st = $('#st'); if (!dot) return;
+  if (DEMO) { dot.className = 'ak-dot'; st.textContent = '예시'; return; }
+  const pend = queue().length;
+  dot.className = 'ak-dot ' + (ok ? 'live' : 'off');
+  st.textContent = ok ? (pend ? `보낼 기록 ${pend}건` : AppKit.hhmm(S.lastOk) + ' 갱신')
+    : (pend ? `연결되면 ${pend}건 보낼게요` : S.lastOk ? AppKit.hhmm(S.lastOk) + ' 이후 연결 안 됨' : '연결 안 됨');
+}
+
+/* 불러오기: 지난 데이터를 먼저 보여 주고 서버 것으로 바꾼다. 아직 못 보낸 기록은 그 위에 다시 얹는다. */
+const seq = AppKit.sequence();
+async function refresh() {
+  if (DEMO) return;
+  const mine = seq.next();
+  try {
+    await flush();
+    const d = await AppKit.spin('#refresh', api('load'));
+    if (!seq.is(mine)) return;
+    let recs = d.recs || [];
+    for (const op of queue()) {
+      recs = recs.filter(r => r.id !== (op.rec?.id || op.id));
+      if (op.op === 'save') recs.push(op.rec);
+    }
+    S.recs = recs; LS.set('recs', recs);
+    if (d.cats) { S.cats = Object.assign({}, DEF, d.cats); LS.set('cats', d.cats); }
+    S.lastOk = new Date(); setStatus(true);
+    if (!sheet.isOpen && !AppKit.editing() && tabs.current !== 'add') draw();
+  } catch (e) {
+    setStatus(false);
+    if (e.code === 'auth') AppKit.toast('서버 주소가 바뀌었어요. 설정에서 다시 연결해 주세요.');
+    else if (!S.recs.length) AppKit.toast('서버에 연결하지 못했어요. 잠시 후 다시 해주세요.');
+  }
+}
+
+function persist() { if (!DEMO) LS.set('recs', S.recs); }
+async function saveRec(rec) {
+  rec.upd = Date.now();
+  S.recs = S.recs.filter(r => r.id !== rec.id).concat(rec); persist();
+  if (DEMO) return;
+  enqueue({ op: 'save', rec }); setStatus(navigator.onLine);
+  await flush(); setStatus(!queue().length);
+}
+async function delRec(id) {
+  S.recs = S.recs.filter(r => r.id !== id); persist();
+  if (DEMO) return;
+  enqueue({ op: 'del', id }); await flush(); setStatus(!queue().length);
+}
+async function saveCats() {
+  LS.set('cats', S.cats);
+  if (!DEMO) { try { await api('cats', { cats: S.cats }); } catch (e) { AppKit.toast('항목은 이 휴대폰에만 저장했어요. 연결되면 다시 저장해 주세요.'); } }
+}
+
+/* ═══ 화면 ═══ */
+const sheet = AppKit.sheet('#sheet');
+function draw() { tabs.go(tabs.current, 0); }
+
+function filtered() {
+  const q = S.q.trim().toLowerCase();
+  return S.recs.filter(r => (S.dir === 'all' || r.dir === S.dir) && (!S.month || r.date.startsWith(S.month)) &&
+    (!q || [r.name, r.who, r.type, r.grp, r.memo, r.phone, (r.tags || []).join(' ')].join(' ').toLowerCase().includes(q)))
+    .sort((a, b) => b.date.localeCompare(a.date) || (b.upd || 0) - (a.upd || 0));
+}
+const tagsTxt = r => (r.tags || []).map(t => '#' + esc(t)).join(' ');
+const soon = r => r.date > TODAY ? `<span class="soon">D-${dayDiff(r.date, TODAY)}</span>` : '';
+const amtTxt = r => r.amount ? (r.dir === 'give' ? '' : '') + won(r.amount) : esc((r.tags || []).find(t => ['선물', '화환', '상품권'].includes(t)) || '금액 없음');
+
+/* ── 내역 ── */
+function topList() {
+  return `<button class="icbtn${S.month ? ' on' : ''}" data-act="month" aria-label="달 고르기"><svg class="ak-ic" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></button>
+    <div class="top-mid"><div class="seg">${[['all', '전체'], ['give', '보낸 돈'], ['recv', '받은 돈']].map(([k, t]) => `<button data-dir="${k}" class="${S.dir === k ? 'on' : ''}">${t}</button>`).join('')}</div></div>
+    <button class="icbtn" id="refresh" data-act="refresh" aria-label="새로고침"><svg class="ak-ic" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg></button>`;
+}
+function viewList() {
+  return `<div id="sum"></div>
+    <div class="search"><svg class="ak-ic" viewBox="0 0 24 24" style="width:18px;height:18px"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="이름, 관계, 메모로 찾기" value="${esc(S.q)}" autocomplete="off" enterkeyhint="search"></div>
+    ${S.month ? `<button class="chip-x" data-act="clearMonth">${ym(S.month + '-01')}만 보는 중 ✕</button>` : ''}
+    <div id="list"></div>
+    <p class="muted" style="text-align:center;font-size:12px;margin:14px 0 0"><span class="ak-status"><i class="ak-dot" id="dot"></i><span id="st"></span></span></p>`;
+}
+function fillList() {
+  const L = filtered(), g = L.filter(r => r.dir === 'give'), v = L.filter(r => r.dir === 'recv');
+  {
+    $('#sum').innerHTML = `<div class="sumA">${S.dir !== 'recv' ? `<div><small>보낸 돈 ${g.length}건</small><b class="amt give">${won(sum(g))}</b></div>` : ''}${S.dir !== 'give' ? `<div><small>받은 돈 ${v.length}건</small><b class="amt recv">${won(sum(v))}</b></div>` : ''}</div>`;
+    if (S.dir !== 'all') $('#sum .sumA').style.gridTemplateColumns = '1fr';
+  }
+  const list = $('#list');
+  if (!S.recs.length) { list.innerHTML = `<div class="empty"><b>아직 기록이 없어요</b>아래 <b style="display:inline">추가</b>에서 첫 경조사를 남겨 보세요.</div>`; return; }
+  if (!L.length) { list.innerHTML = `<div class="empty"><b>찾는 기록이 없어요</b>검색어나 보낸 돈·받은 돈 선택을 바꿔 보세요.</div>`; return; }
+  const by = {}; L.forEach(r => (by[r.date.slice(0, 7)] ||= []).push(r));
+  list.innerHTML = Object.keys(by).map(k => {
+    const rs = by[k];
+    const head = `<div class="mh"><b>${ym(k + '-01')}</b><span>${rs.length}건 · ${won(sum(rs))}</span></div>`;
+    return head + `<div class="rowsA">` + rs.map(r => `<button class="rowA" data-open="${esc(r.id)}">
+      <span class="dbox ${r.dir}"><b class="num">${+r.date.slice(8)}</b><i>${dow(r.date)}요일</i></span>
+      <span class="mid"><b>${esc(r.name)}${soon(r)}</b><span class="tag">${tagsTxt(r) || (r.grp ? esc(r.grp) : '')}</span></span>
+      <span class="end"><small>${esc(what(r))}</small><span class="amt ${r.dir}">${amtTxt(r)}</span></span></button>`).join('') + `</div>`;
+  }).join('');
+}
+/* 기록 자세히 보기 (시트) */
+function openDetail(id) {
+  const r = S.recs.find(x => x.id === id); if (!r) return;
+  const others = S.recs.filter(x => x.name === r.name && x.id !== r.id).sort((a, b) => b.date.localeCompare(a.date));
+  const g = sum(S.recs.filter(x => x.name === r.name && x.dir === 'give')), v = sum(S.recs.filter(x => x.name === r.name && x.dir === 'recv'));
+  $('#sheetBody').innerHTML = `<div class="det">
+    <h2>${esc(r.name)} <span class="muted" style="font-size:16px;font-weight:600">${esc(what(r))}</span></h2>
+    <p class="meta">${r.date.slice(0, 4)}년 ${md(r.date)}(${dow(r.date)}) · ${r.dir === 'give' ? '내가 보냄' : '내가 받음'}${r.date > TODAY ? ` · D-${dayDiff(r.date, TODAY)}` : ''}</p>
+    <div class="big ${r.dir} num">${amtTxt(r)}</div>
+    <dl>${r.grp ? `<dt>사이</dt><dd>${esc(r.grp)}</dd>` : ''}${r.phone ? `<dt>연락처</dt><dd><a href="tel:${esc(r.phone)}" style="color:var(--accent)">${esc(r.phone)}</a></dd>` : ''}
+    ${(r.tags || []).length ? `<dt>표시</dt><dd>${tagsTxt(r)}</dd>` : ''}${r.memo ? `<dt>메모</dt><dd>${esc(r.memo)}</dd>` : ''}</dl>
+    ${others.length ? `<div class="hist"><div><b>${esc(r.name)} 님과 주고받은 기록</b></div>${others.map(o => `<div><span>${o.date.slice(2).replace(/-/g, '.')} ${esc(what(o))}</span><span class="amt ${o.dir}">${o.dir === 'give' ? '보냄' : '받음'} ${amtTxt(o)}</span></div>`).join('')}
+      <div style="border-top:1px solid var(--line);margin-top:4px;padding-top:6px"><span>합계</span><span><span class="amt give">보냄 ${won(g)}</span> · <span class="amt recv">받음 ${won(v)}</span></span></div></div>` : ''}
+    <div class="btns"><button class="btn danger" data-del="${esc(r.id)}">삭제</button><button class="btn ghost" data-copy="${esc(r.id)}">답례 기록</button><button class="btn" data-edit="${esc(r.id)}">수정</button></div></div>`;
+  sheet.open();
+}
+
+/* 달 고르기 (시트) */
+function openMonths() {
+  const months = [...new Set(S.recs.map(r => r.date.slice(0, 7)))].sort().reverse();
+  $('#sheetBody').innerHTML = `<h2 style="margin:0 0 12px;font-size:19px">어느 달을 볼까요?</h2>
+    <div class="chips wrap"><button data-month="" class="${!S.month ? 'on' : ''}">전체 기간</button>${months.map(m => `<button data-month="${m}" class="${S.month === m ? 'on' : ''}">${m.slice(2, 4)}년 ${+m.slice(5)}월 · ${S.recs.filter(r => r.date.startsWith(m)).length}</button>`).join('')}</div>`;
+  sheet.open();
+}
+
+/* ── 추가·수정 ── */
+const blank = () => ({ id: '', dir: 'give', date: TODAY, name: '', phone: '', who: '본인', type: '결혼', grp: '', amount: 0, memo: '', tags: [] });
+function topAdd() {
+  const d = S.draft;
+  return `<h1 class="ttl">${d.id ? '기록 수정' : '기록 추가'}</h1>
+    <div class="seg">${[['give', '보냄'], ['recv', '받음']].map(([k, t]) => `<button data-fdir="${k}" class="${d.dir === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
+}
+const chipRow = (key, list, cur, multi) => `<div class="chips ak-hscroll" data-noswipe data-chips="${key}">${list.map(v => `<button type="button" data-chip="${esc(v)}" class="${(multi ? cur.includes(v) : cur === v) ? 'on' : ''}">${esc(v)}</button>`).join('')}</div>`;
+function viewAdd() {
+  const d = S.draft;
+  const names = [...new Set(S.recs.map(r => r.name))];
+  return `<form class="form" id="form" autocomplete="off">
+    <div class="fl"><span class="lb">날짜</span>
+      <button type="button" class="dateBtn" data-act="cal"><span class="num">${d.date.slice(0, 4)}년 ${md(d.date)} (${dow(d.date)})</span><span class="muted" style="font-size:14px;font-weight:600">${d.date === TODAY ? '오늘' : d.date > TODAY ? 'D-' + dayDiff(d.date, TODAY) : dayDiff(TODAY, d.date) + '일 전'} ▾</span></button>
+      <div id="cal">${S.calOpen ? calHTML() : ''}</div></div>
+    <div class="fl"><label for="fName">이름 <span style="font-weight:500">(누구의 경조사인지)</span></label>
+      <input class="inp" id="fName" name="name" list="names" value="${esc(d.name)}" placeholder="예: 홍길동" required>
+      <datalist id="names">${names.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+      <div id="nameHint"></div></div>
+    <div class="fl"><span class="lb">누구의</span>${chipRow('who', S.cats.who, d.who)}<input class="inp" id="fWho" value="${S.cats.who.includes(d.who) ? '' : esc(d.who)}" placeholder="목록에 없으면 직접 입력"></div>
+    <div class="fl"><span class="lb">종류</span>${chipRow('type', S.cats.type, d.type)}<input class="inp" id="fType" value="${S.cats.type.includes(d.type) ? '' : esc(d.type)}" placeholder="목록에 없으면 직접 입력"></div>
+    <div class="fl"><label for="fAmt">금액</label>
+      <input class="inp num" id="fAmt" inputmode="numeric" value="${d.amount ? num(d.amount) : ''}" placeholder="0원">
+      <div class="chips amts ak-hscroll" data-noswipe>${S.cats.amt.map(a => `<button type="button" data-amt="${a}">+${man(a)}</button>`).join('')}<button type="button" data-amt="0">지우기</button></div></div>
+    <div class="fl"><span class="lb">나와의 사이</span>${chipRow('grp', S.cats.grp, d.grp)}</div>
+    <div class="fl"><span class="lb">표시</span><div class="chips wrap" data-chips="tags">${S.cats.tag.map(t => `<button type="button" data-chip="${esc(t)}" class="${d.tags.includes(t) ? 'on' : ''}">#${esc(t)}</button>`).join('')}</div></div>
+    <div class="two"><div class="fl"><label for="fPhone">연락처</label><input class="inp" id="fPhone" type="tel" value="${esc(d.phone)}" placeholder="010-0000-0000"></div><div></div></div>
+    <div class="fl"><label for="fMemo">메모</label><textarea class="inp" id="fMemo" rows="2" placeholder="장소, 시간, 함께 간 사람 등">${esc(d.memo)}</textarea></div>
+    <div class="btns" style="margin-top:4px"><button type="button" class="btn ghost" data-act="reset">${d.id ? '취소' : '새로 입력'}</button><button type="submit" class="btn" id="saveBtn">${d.id ? '수정하기' : '저장하기'}</button></div>
+  </form>`;
+}
+function calHTML() {
+  const [y, m] = S.calM.split('-').map(Number);
+  const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const has = new Set(S.recs.filter(r => r.date.startsWith(S.calM)).map(r => +r.date.slice(8)));
+  let cells = DOW.split('').map((d, i) => `<span class="${i ? '' : 'sun'}">${d}</span>`).join('') + '<i></i>'.repeat(first);
+  for (let i = 1; i <= days; i++) {
+    const ds = `${S.calM}-${String(i).padStart(2, '0')}`;
+    cells += `<button type="button" data-day="${ds}" class="${ds === S.draft.date ? 'on' : ''}${ds === TODAY ? ' t' : ''}${has.has(i) ? ' has' : ''}${(first + i - 1) % 7 ? '' : ' sun'}">${i}</button>`;
+  }
+  return `<div class="cal" data-noswipe><div class="hd"><button type="button" class="icbtn" data-calm="-1" aria-label="이전 달">‹</button><b>${y}년 ${m}월</b><button type="button" class="icbtn" data-calm="1" aria-label="다음 달">›</button></div><div class="g">${cells}</div></div>`;
+}
+function nameHint() {
+  const el = $('#nameHint'); if (!el) return;
+  const n = S.draft.name.trim(); const rs = n ? S.recs.filter(r => r.name === n && r.id !== S.draft.id).sort((a, b) => b.date.localeCompare(a.date)) : [];
+  el.innerHTML = rs.length ? `<div class="hint">${esc(n)} 님과의 기록 ${rs.length}건 · 최근 ${rs[0].date.slice(2).replace(/-/g, '.')} ${esc(what(rs[0]))} ${rs[0].dir === 'give' ? '보냄' : '받음'} ${amtTxt(rs[0])}<br>보낸 돈 ${won(sum(rs.filter(r => r.dir === 'give')))} · 받은 돈 ${won(sum(rs.filter(r => r.dir === 'recv')))}</div>` : '';
+}
+function readForm() {
+  const d = S.draft;
+  d.name = $('#fName').value.trim(); d.phone = $('#fPhone').value.trim(); d.memo = $('#fMemo').value.trim();
+  d.amount = parseInt(($('#fAmt').value || '').replace(/[^0-9]/g, ''), 10) || 0;
+  if ($('#fWho').value.trim()) d.who = $('#fWho').value.trim();
+  if ($('#fType').value.trim()) d.type = $('#fType').value.trim();
+}
+
+/* ── 통계 ── */
+function topStat() {
+  return `<div class="top-mid"><div class="seg">${[['sched', '일정'], ['stat', '통계']].map(([k, t]) => `<button data-stab="${k}" class="${S.statTab === k ? 'on' : ''}">${t}</button>`).join('')}</div></div>`;
+}
+const typeOk = r => S.statType === 'all' || (S.statType === 'etc' ? !['결혼', '장례'].includes(r.type) : r.type === S.statType);
+function viewStat() {
+  const typeSeg = `<div class="seg wide" style="margin-top:4px">${[['all', '전체'], ['결혼', '결혼'], ['장례', '장례'], ['etc', '그 밖']].map(([k, t]) => `<button data-stype="${k}" class="${S.statType === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
+  if (S.statTab === 'sched') {
+    const y = String(S.year), rs = S.recs.filter(r => r.date.startsWith(y) && typeOk(r));
+    const cnt = Array.from({ length: 12 }, (_, i) => rs.filter(r => +r.date.slice(5, 7) === i + 1).length), mx = Math.max(...cnt, 1);
+    const W = 340, H = 150, bw = 18, step = (W - 20) / 12;
+    const bars = cnt.map((c, i) => { const h = c / mx * 96, x = 10 + i * step + (step - bw) / 2;
+      return `<rect x="${x}" y="${118 - h}" width="${bw}" height="${Math.max(h, 1.5)}" rx="4" fill="${c ? 'var(--accent)' : 'var(--line)'}"/>${c ? `<text class="v" x="${x + bw / 2}" y="${112 - h}" text-anchor="middle">${c}</text>` : ''}<text x="${x + bw / 2}" y="${138}" text-anchor="middle">${i + 1}월</text>`; }).join('');
+    const up = S.recs.filter(r => r.date >= TODAY && typeOk(r)).sort((a, b) => a.date.localeCompare(b.date));
+    const past = rs.filter(r => r.date < TODAY).sort((a, b) => b.date.localeCompare(a.date));
+    const row = r => {
+      const dd = r.date >= TODAY ? `<span class="dday up">${r.date === TODAY ? '오늘' : 'D-' + dayDiff(r.date, TODAY)}</span>` : '';
+      const thanks = r.dir === 'recv' && dayDiff(TODAY, r.date) <= 60 ? `<button class="msg" data-thanks="${esc(r.id)}">감사 문자</button>` : '';
+      return `<div data-open="${esc(r.id)}" style="cursor:pointer"><span class="d num">${md(r.date)}<small>${r.date >= TODAY ? dow(r.date) + '요일' : dayDiff(TODAY, r.date) + '일 전'}</small></span>
+        <span class="w"><b>${esc(r.name)} ${esc(what(r))}</b><small class="${r.dir}">${r.dir === 'give' ? '보냄' : '받음'} ${amtTxt(r)}</small></span>${thanks || dd}</div>`;
+    };
+    return `${typeSeg}<div class="yr"><button class="icbtn" data-year="-1" aria-label="이전 해">‹</button><b class="num">${y}년</b><button class="icbtn" data-year="1" aria-label="다음 해">›</button></div>
+      <div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${y}년 달별 경조사 건수">${bars}</svg></div>
+      <div class="sec">다가오는 일정 ${up.length}건</div>${up.length ? `<div class="sch">${up.map(row).join('')}</div>` : '<p class="muted" style="margin:0 2px">예정된 경조사가 없어요. 날짜가 오늘 뒤인 기록이 여기에 모여요.</p>'}
+      <div class="sec">${y}년 지난 기록 ${past.length}건</div>${past.length ? `<div class="sch">${past.map(row).join('')}</div>` : ''}`;
+  }
+  const rs = S.recs.filter(typeOk), years = [...new Set(rs.map(r => r.date.slice(0, 4)))].sort().reverse();
+  const yv = years.map(y => ({ y, g: rs.filter(r => r.dir === 'give' && r.date.startsWith(y)), v: rs.filter(r => r.dir === 'recv' && r.date.startsWith(y)) }));
+  const mx = Math.max(1, ...yv.map(o => Math.max(sum(o.g), sum(o.v))));
+  const hb = (cls, lab, n, total) => `<div class="hb ${cls}"><span class="muted">${lab} ${n}</span><i><em style="width:${total / mx * 100}%"></em></i><span class="amt ${cls === 'g' ? 'give' : 'recv'}">${won(total)}</span></div>`;
+  const G = rs.filter(r => r.dir === 'give'), V = rs.filter(r => r.dir === 'recv');
+  const byKey = (k) => { const m = {}; rs.forEach(r => { const key = r[k] || '미지정'; (m[key] ||= { g: 0, v: 0, n: 0 }); m[key][r.dir === 'give' ? 'g' : 'v'] += +r.amount || 0; m[key].n++; }); return Object.entries(m).sort((a, b) => (b[1].g + b[1].v) - (a[1].g + a[1].v)); };
+  const tbl = (rows) => { const m2 = Math.max(1, ...rows.map(([, o]) => Math.max(o.g, o.v))); return rows.map(([k, o]) => `<div class="yrow"><div class="t"><b>${esc(k)}</b><small>${o.n}건</small></div>
+      <div class="hb g"><span class="muted">보냄</span><i><em style="width:${o.g / m2 * 100}%"></em></i><span class="amt give">${won(o.g)}</span></div>
+      <div class="hb r"><span class="muted">받음</span><i><em style="width:${o.v / m2 * 100}%"></em></i><span class="amt recv">${won(o.v)}</span></div></div>`).join(''); };
+  return `${typeSeg}<div class="sumA" style="margin-top:12px"><div><small>모두 보낸 돈 ${G.length}건</small><b class="amt give">${won(sum(G))}</b></div><div><small>모두 받은 돈 ${V.length}건</small><b class="amt recv">${won(sum(V))}</b></div></div>
+    <div class="sec">해마다</div>${yv.map(o => `<div class="yrow"><div class="t"><b class="num">${o.y}년</b><small>${o.g.length + o.v.length}건</small></div>${hb('g', '보냄', o.g.length + '건', sum(o.g))}${hb('r', '받음', o.v.length + '건', sum(o.v))}</div>`).join('') || '<p class="muted">기록이 없어요.</p>'}
+    <div class="sec">나와의 사이별</div>${tbl(byKey('grp'))}
+    ${S.statType === 'all' ? `<div class="sec">종류별</div>${tbl(byKey('type'))}` : ''}`;
+}
+function thanksText(r) {
+  const t = r.type === '장례' ? `${r.name}님, 이번에 마음 써 주셔서 깊이 감사드립니다. 덕분에 잘 모셨습니다.`
+    : `${r.name}님, ${r.type === '결혼' || r.type === '입학·졸업' ? '축하해 주셔서' : '마음 써 주셔서'} 정말 감사합니다. 보내 주신 마음 잊지 않겠습니다.`;
+  return t;
+}
+
+/* ── 설정 ── */
+function viewSet() {
+  const pend = queue().length;
+  const catBox = (k, title, fmt = v => v) => `<div class="fl" style="padding:4px 16px 12px"><span class="lb">${title}</span>
+    <div class="edit-chips">${S.cats[k].map((v, i) => `<span>${esc(fmt(v))}<button data-catdel="${k}:${i}" aria-label="${esc(fmt(v))} 빼기">×</button></span>`).join('')}</div>
+    <div class="addrow"><input class="inp" id="cat-${k}" ${k === 'amt' ? 'inputmode="numeric" placeholder="예: 200000"' : 'placeholder="새 항목"'}><button class="btn" data-catadd="${k}">넣기</button></div></div>`;
+  return `<div class="grp"><h3>구글 시트 백업</h3>
+      <div class="item" style="cursor:default"><span class="t"><b>${DEMO ? '연결 안 됨 (예시 보는 중)' : '연결됨'}</b><small>${DEMO ? '내 구글 시트에 저장하면 휴대폰을 바꿔도 기록이 그대로예요.' : `기록 ${S.recs.length}건${pend ? ` · 보낼 기록 ${pend}건` : ''} · <span id="st2">${S.lastOk ? AppKit.hhmm(S.lastOk) + ' 갱신' : ''}</span>`}</small></span></div>
+      <div style="padding:0 16px 14px" class="fl"><input class="inp" id="apiUrl" value="${esc(CFG.api)}" placeholder="Apps Script 웹 앱 주소 (…/exec)">
+        <div class="btns" style="margin-top:4px"><button class="btn" data-act="saveApi">${CFG.api ? '주소 바꾸기' : '연결하기'}</button>${CFG.api ? '<button class="btn ghost" data-act="syncNow">지금 맞추기</button>' : ''}</div></div></div>
+    <div class="grp"><h3>알림</h3>
+      <button class="item" data-act="cal"><span class="t"><b>다가오는 경조사 캘린더 등록</b><small>날짜가 오늘 뒤인 기록을 저장하면 구글 캘린더에 일정과 하루 전 알림을 넣어요.</small></span><span class="sw ${CFG.cal ? 'on' : ''}" data-sw="cal"></span></button></div>
+    <div class="grp"><h3>보안·화면</h3>
+      <button class="item" data-act="pin"><span class="t"><b>암호 잠금</b><small>${CFG.pin ? '켜져 있어요. 누르면 끌 수 있어요.' : '앱을 열 때 숫자 4자리를 물어봐요.'}</small></span><span class="sw ${CFG.pin ? 'on' : ''}"></span></button>
+      <div class="item" style="cursor:default"><span class="t"><b>화면 밝기</b></span><div class="seg">${[['auto', '자동'], ['light', '밝게'], ['dark', '어둡게']].map(([k, t]) => `<button data-theme="${k}" class="${CFG.theme === k ? 'on' : ''}">${t}</button>`).join('')}</div></div></div>
+    <div class="grp"><h3>항목 관리</h3>${catBox('who', '누구의')}${catBox('type', '종류')}${catBox('grp', '나와의 사이')}${catBox('amt', '금액 버튼', v => '+' + man(v))}${catBox('tag', '표시')}</div>
+    <div class="grp"><h3>내보내기·불러오기</h3>
+      <button class="item" data-act="export"><span class="t"><b>엑셀 파일로 내보내기</b><small>CSV 파일로 저장하거나 메일·카카오톡·구글 드라이브로 보내요.</small></span><span class="v">›</span></button>
+      <button class="item" data-act="import"><span class="t"><b>엑셀 파일 불러오기</b><small>날짜·구분(보냄/받음)·이름·누구의·종류·금액 열이 있는 CSV를 한꺼번에 넣어요.</small></span><span class="v">›</span></button></div>
+    <p class="diag">${AppKit.env(BUILD)}</p>`;
+}
+
+/* ── 맨 위 줄 ── */
+function topSet() { return `<h1 class="ttl">설정</h1>`; }
+
+const tabs = AppKit.tabs({
+  ids: ['list', 'add', 'stat', 'set'], remember: 'gyeongjosa.tab',
+  render(id) {
+    if (id === 'add' && !S.draft) S.draft = blank();
+    $('#top').innerHTML = id === 'list' ? topList() : id === 'add' ? topAdd() : id === 'stat' ? topStat() : topSet();
+    $('#sc').innerHTML = id === 'list' ? viewList() : id === 'add' ? viewAdd() : id === 'stat' ? viewStat() : viewSet();
+    if (id === 'list') { fillList(); setStatus(!!S.lastOk); }
+    if (id === 'add') nameHint();
+  },
+});
+
+/* ── 누르기 (data-* 하나로 처리) ── */
+document.addEventListener('click', async e => {
+  const t = e.target.closest('button,[data-open]'); if (!t) return;
+  const ds = t.dataset;
+  if (ds.dir) { S.dir = ds.dir; LS.set('dir', S.dir); document.querySelectorAll('[data-dir]').forEach(b => b.classList.toggle('on', b === t)); fillList(); return; }
+  if (ds.open) { openDetail(ds.open); return; }
+  if (ds.month != null) { S.month = ds.month || null; sheet.close(); draw(); return; }
+  if (ds.edit || ds.copy) {
+    const r = S.recs.find(x => x.id === (ds.edit || ds.copy));
+    S.draft = ds.edit ? JSON.parse(JSON.stringify(r)) : Object.assign(blank(), { name: r.name, phone: r.phone, grp: r.grp, dir: r.dir === 'give' ? 'recv' : 'give' });
+    S.calM = S.draft.date.slice(0, 7); S.calOpen = false; sheet.close(); tabs.go('add'); return;
+  }
+  if (ds.del) { if (!AppKit.sure(t)) return; const r = S.recs.find(x => x.id === ds.del); await delRec(ds.del); sheet.close(); draw(); AppKit.toast(`${r?.name || ''} 기록을 지웠어요`); return; }
+  if (ds.fdir) { readForm(); S.draft.dir = ds.fdir; document.querySelectorAll('[data-fdir]').forEach(b => b.classList.toggle('on', b === t)); return; }
+  if (ds.chip != null) {
+    const box = t.closest('[data-chips]').dataset.chips, d = S.draft;
+    if (box === 'tags') { d.tags = d.tags.includes(ds.chip) ? d.tags.filter(x => x !== ds.chip) : d.tags.concat(ds.chip); t.classList.toggle('on'); return; }
+    d[box] = box === 'grp' && d.grp === ds.chip ? '' : ds.chip;
+    t.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === t && !!d[box]));
+    const inp = { who: '#fWho', type: '#fType' }[box]; if (inp) $(inp).value = '';
+    return;
+  }
+  if (ds.amt != null) { const f = $('#fAmt'), cur = parseInt((f.value || '').replace(/[^0-9]/g, ''), 10) || 0; f.value = +ds.amt ? num(cur + +ds.amt) : ''; AppKit.buzz(); return; }
+  if (ds.day) { readForm(); S.draft.date = ds.day; S.calOpen = false; draw(); return; }
+  if (ds.calm) { const [y, m] = S.calM.split('-').map(Number), dt = new Date(Date.UTC(y, m - 1 + +ds.calm, 1)); S.calM = dt.toISOString().slice(0, 7); $('#cal').innerHTML = calHTML(); return; }
+  if (ds.stab) { S.statTab = ds.stab; LS.set('statTab', S.statTab); draw(); return; }
+  if (ds.stype) { S.statType = ds.stype; $('#sc').innerHTML = viewStat(); return; }
+  if (ds.year) { S.year += +ds.year; $('#sc').innerHTML = viewStat(); return; }
+  if (ds.thanks) {
+    e.stopPropagation(); const r = S.recs.find(x => x.id === ds.thanks), msg = thanksText(r);
+    if (r.phone) location.href = `sms:${r.phone.replace(/[^0-9]/g, '')}&body=${encodeURIComponent(msg)}`; else AppKit.copy(msg);
+    return;
+  }
+  if (ds.theme) { CFG.theme = ds.theme; saveCfg(); applyTheme(); draw(); return; }
+  if (ds.catdel) { const [k, i] = ds.catdel.split(':'); if (!AppKit.sure(t, '빼기')) return; S.cats[k] = S.cats[k].filter((_, j) => j !== +i); await saveCats(); draw(); return; }
+  if (ds.catadd) {
+    const k = ds.catadd, inp = $('#cat-' + k); let v = inp.value.trim(); if (!v) return;
+    if (k === 'amt') { v = parseInt(v.replace(/[^0-9]/g, ''), 10); if (!v) return AppKit.toast('숫자로 넣어 주세요'); }
+    if (S.cats[k].includes(v)) return AppKit.toast('이미 있어요');
+    S.cats[k] = S.cats[k].concat(v); if (k === 'amt') S.cats.amt.sort((a, b) => a - b);
+    await saveCats(); draw(); AppKit.toast('넣었어요'); return;
+  }
+  switch (ds.act) {
+    case 'month': openMonths(); break;
+    case 'clearMonth': S.month = null; draw(); break;
+    case 'refresh': if (DEMO) AppKit.toast('예시를 보는 중이에요. 설정에서 구글 시트를 연결해 주세요.'); else refresh(); break;
+    case 'cal': if (tabs.current === 'add') { readForm(); S.calOpen = !S.calOpen; S.calM = S.draft.date.slice(0, 7); $('#cal').innerHTML = S.calOpen ? calHTML() : ''; }
+      else { CFG.cal = !CFG.cal; saveCfg(); t.querySelector('.sw').classList.toggle('on', CFG.cal); AppKit.toast(CFG.cal ? '다가오는 경조사를 캘린더에 넣을게요' : '캘린더에 넣지 않을게요'); } break;
+    case 'reset': S.draft = blank(); S.calOpen = false; draw(); break;
+    case 'saveApi': {
+      const u = $('#apiUrl').value.trim();
+      if (u && !/^https:\/\/script\.google\.com\/.+\/exec/.test(u)) { AppKit.toast('…/exec 로 끝나는 Apps Script 주소를 넣어 주세요'); break; }
+      CFG.api = u; saveCfg(); AppKit.toast(u ? '연결했어요. 다시 열게요' : '연결을 끊었어요');
+      setTimeout(() => location.replace(location.pathname), 600); break;
+    }
+    case 'syncNow': await refresh(); draw(); AppKit.toast(queue().length ? '아직 못 보낸 기록이 있어요' : '구글 시트와 맞췄어요'); break;
+    case 'pin': if (CFG.pin) { CFG.pin = ''; saveCfg(); draw(); AppKit.toast('암호 잠금을 껐어요'); } else lockSetup(); break;
+    case 'export': exportCsv(); break;
+    case 'import': $('#fileIn').click(); break;
+  }
+});
+
+/* 입력 */
+document.addEventListener('input', e => {
+  if (e.target.id === 'q') { S.q = e.target.value; fillList(); }
+  if (e.target.id === 'fName') { S.draft.name = e.target.value; nameHint(); }
+  if (e.target.id === 'fAmt') { const v = e.target.value.replace(/[^0-9]/g, ''); e.target.value = v ? num(+v) : ''; }
+  if (e.target.id === 'fWho' || e.target.id === 'fType') {
+    const key = e.target.id === 'fWho' ? 'who' : 'type';
+    if (e.target.value.trim()) document.querySelectorAll(`[data-chips="${key}"] button`).forEach(b => b.classList.remove('on'));
+  }
+});
+document.addEventListener('submit', async e => {
+  if (e.target.id !== 'form') return;
+  e.preventDefault(); readForm();
+  const d = S.draft;
+  if (!d.name) { AppKit.toast('이름을 넣어 주세요'); $('#fName').focus(); return; }
+  const btn = $('#saveBtn'); btn.disabled = true;
+  const isNew = !d.id; if (isNew) d.id = uid();
+  try { await saveRec(JSON.parse(JSON.stringify(d))); }
+  finally { btn.disabled = false; }
+  AppKit.toast(isNew ? `${d.name} 님 기록을 저장했어요` : '고쳤어요');
+  S.draft = isNew ? Object.assign(blank(), { dir: d.dir, date: d.date }) : null;
+  S.calOpen = false;
+  if (isNew) draw(); else tabs.go('list');
+});
+
+/* ── 내보내기·불러오기 (CSV, 엑셀에서 바로 열림) ── */
+const COLS = ['날짜', '구분', '이름', '누구의', '종류', '금액', '나와의 사이', '표시', '연락처', '메모'];
+async function exportCsv() {
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const rows = [...S.recs].sort((a, b) => a.date.localeCompare(b.date)).map(r => [r.date, r.dir === 'give' ? '보냄' : '받음', r.name, r.who, r.type, r.amount, r.grp, (r.tags || []).join(' '), r.phone, r.memo].map(q).join(','));
+  const csv = '﻿' + COLS.map(q).join(',') + '\n' + rows.join('\n');
+  const name = `경조사_${TODAY}.csv`, file = new File([csv], name, { type: 'text/csv' });
+  try { if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; } } catch (e) { if (e.name === 'AbortError') return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function parseCsv(text) {
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"' && text[i + 1] === '"') { cur += '"'; i++; } else if (c === '"') q = false; else cur += c; }
+    else if (c === '"') q = true; else if (c === ',') { row.push(cur); cur = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; }
+    else cur += c;
+  }
+  if (cur || row.length) { row.push(cur); rows.push(row); }
+  return rows.filter(r => r.some(x => x.trim()));
+}
+$('#fileIn').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const rows = parseCsv((await f.text()).replace(/^﻿/, ''));
+  const head = rows.shift() || [], ix = n => head.findIndex(h => h.trim() === n);
+  if (ix('날짜') < 0 || ix('이름') < 0) { AppKit.toast('첫 줄에 날짜·이름 열이 있어야 해요'); return; }
+  const g = (r, n) => (ix(n) >= 0 ? r[ix(n)] || '' : '').trim();
+  const add = rows.map(r => {
+    let dt = g(r, '날짜').replace(/[./]/g, '-').replace(/\s/g, ''); const m = dt.match(/^(\d{2,4})-(\d{1,2})-(\d{1,2})/);
+    if (!m) return null; dt = `${m[1].length === 2 ? '20' + m[1] : m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+    return { id: uid(), dir: /받/.test(g(r, '구분')) ? 'recv' : 'give', date: dt, name: g(r, '이름'), who: g(r, '누구의'), type: g(r, '종류'),
+      amount: parseInt(g(r, '금액').replace(/[^0-9]/g, ''), 10) || 0, grp: g(r, '나와의 사이'), tags: g(r, '표시').split(/[\s,#]+/).filter(Boolean), phone: g(r, '연락처'), memo: g(r, '메모'), upd: Date.now() };
+  }).filter(r => r && r.name);
+  if (!add.length) { AppKit.toast('넣을 기록을 찾지 못했어요'); return; }
+  S.recs = S.recs.concat(add); persist();
+  if (!DEMO) { try { await api('bulk', { recs: add }); } catch (err) { add.forEach(r => enqueue({ op: 'save', rec: r })); } }
+  draw(); AppKit.toast(`${add.length}건을 불러왔어요`);
+});
+
+/* ── 암호 잠금 ── 숫자 4자리를 해시로만 저장한다 (이 휴대폰 안에서만) */
+async function hash(s) {
+  try { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('gjs:' + s)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
+  catch (e) { let h = 0; for (const c of 'gjs:' + s) h = (h * 31 + c.charCodeAt(0)) | 0; return 'x' + h; }
+}
+let pinBuf = '', pinMode = 'unlock', pinFirst = '';
+$('#lockPad').innerHTML = [1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-pin="${n}">${n}</button>`).join('') + '<button class="x" data-pin="c">취소</button><button data-pin="0">0</button><button class="x" data-pin="b">지우기</button>';
+function lockShow(mode) {
+  pinMode = mode; pinBuf = ''; pinFirst = '';
+  $('#lock h2').textContent = mode === 'unlock' ? '암호를 눌러 주세요' : '새 암호 4자리를 눌러 주세요';
+  $('#lockMsg').textContent = ''; $('[data-pin="c"]').style.visibility = mode === 'unlock' ? 'hidden' : '';
+  dots(); $('#lock').hidden = false;
+}
+const dots = () => $('#lockDots').querySelectorAll('i').forEach((d, i) => d.classList.toggle('f', i < pinBuf.length));
+function lockSetup() { lockShow('set'); }
+$('#lockPad').addEventListener('click', async e => {
+  const k = e.target.closest('[data-pin]')?.dataset.pin; if (k == null) return;
+  e.stopPropagation(); AppKit.buzz();
+  if (k === 'c') { $('#lock').hidden = true; return; }
+  if (k === 'b') { pinBuf = pinBuf.slice(0, -1); dots(); return; }
+  if (pinBuf.length < 4) pinBuf += k; dots();
+  if (pinBuf.length < 4) return;
+  const v = pinBuf; pinBuf = '';
+  if (pinMode === 'unlock') {
+    if (await hash(v) === CFG.pin) { $('#lock').hidden = true; LS.set('unlockAt', Date.now()); }
+    else { $('#lockMsg').textContent = '암호가 달라요'; $('#lockDots').classList.remove('shake'); void $('#lockDots').offsetWidth; $('#lockDots').classList.add('shake'); }
+  } else if (!pinFirst) { pinFirst = v; $('#lock h2').textContent = '한 번 더 눌러 주세요'; }
+  else if (pinFirst === v) { CFG.pin = await hash(v); saveCfg(); $('#lock').hidden = true; draw(); AppKit.toast('암호 잠금을 켰어요'); }
+  else { pinFirst = ''; $('#lock h2').textContent = '새 암호 4자리를 눌러 주세요'; $('#lockMsg').textContent = '두 번 누른 암호가 달라요'; }
+  setTimeout(dots, 150);
+});
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) hiddenAt = Date.now();
+  else if (CFG.pin && hiddenAt && Date.now() - hiddenAt > 60000) lockShow('unlock');   // 1분 넘게 다른 앱에 있다 돌아오면 다시 잠근다
+});
+if (CFG.pin && !DEMO) lockShow('unlock');
+
+/* ── 시작 ── */
+AppKit.poll(refresh, 60000, () => sheet.isOpen || tabs.current === 'add' || AppKit.editing());
+if (S.recs.length || DEMO) AppKit.bootDone();
+refresh().finally(AppKit.bootDone);
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');
+</script>
+</body>
+</html>

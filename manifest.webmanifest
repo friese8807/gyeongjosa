@@ -1,0 +1,17 @@
+{
+  "id": "./",
+  "name": "경조사 기록장",
+  "short_name": "경조사",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "lang": "ko",
+  "background_color": "#121417",
+  "theme_color": "#121417",
+  "icons": [
+    { "src": "icon-192-v1.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512-v1.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512-maskable-v1.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
