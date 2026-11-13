@@ -598,8 +598,19 @@ const AppKit = (() => {
 })();
 </script>
 <script>
-const BUILD = '1794563645';            // version.txt 와 같은 숫자 — scripts/bump_version.py 가 함께 바꾼다
-AppKit.fixViewport();
+const BUILD = '1794566217';            // version.txt 와 같은 숫자 — scripts/bump_version.py 가 함께 바꾼다
+/* 화면 높이: 상태바가 default 인 홈 화면 앱에서는 innerHeight 가 이미 상태바를 뺀 높이다.
+   키트의 fixViewport() 처럼 화면 전체와의 차이를 더하면 문서가 상태바 높이만큼 길어져
+   탭바가 화면 아래로 밀려난다(아이폰 실기기에서 확인). 그래서 innerHeight 를 그대로 쓴다.
+   혹시 아래에 틈이 남아도 html 배경(탭바 색)이 이어져 보이게 가린다. */
+function fitHeight() {
+  const h = innerHeight;
+  document.documentElement.style.setProperty('--app-h', h + 'px');
+  document.documentElement.classList.toggle('standalone', AppKit.standalone());
+}
+fitHeight();
+addEventListener('resize', fitHeight);
+addEventListener('orientationchange', () => setTimeout(fitHeight, 300));
 AppKit.autoUpdate(BUILD);
 AppKit.showErrors(BUILD);
 const LS = AppKit.store('gyeongjosa');   // 저장소 접두어 — 같은 github.io 주소의 다른 앱과 섞이지 않게
