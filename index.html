@@ -201,6 +201,28 @@ button{touch-action:manipulation}
 .rowA .end .amt{font-size:16px}
 .soon{display:inline-block;font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:2px}
 
+/* ── 달 고르기 (연도 보기) ── */
+.yv-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-bottom:4px}
+.yv-top .muted{font-size:12.5px}
+.chip-all{border:1px solid var(--line);background:var(--solid);color:var(--ink);font:inherit;font-size:14px;font-weight:700;border-radius:999px;padding:8px 14px;cursor:pointer}
+.chip-all.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.yv h2{margin:18px 0 10px;font-size:30px;font-weight:800;letter-spacing:-.02em;display:flex;align-items:baseline;gap:10px}
+.yv h2.cur{color:var(--give)}
+.yv h2 small{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:0}
+.yg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;gap:14px 10px}
+.ym{display:block;width:100%;letter-spacing:0;border:0;background:none;color:var(--ink);font:inherit;text-align:left;padding:6px 4px;border-radius:12px;cursor:pointer;min-width:0}
+.ym.on{background:var(--accent-soft)}
+.ym.none{opacity:.55}
+.ym b{display:flex;align-items:baseline;gap:5px;font-size:15px;font-weight:800;margin:0 0 6px 2px}
+.ym b.cur{color:var(--give)}
+.ym b small{font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:0 5px}
+.ym.on b small{background:var(--solid)}
+.mg{display:grid;grid-template-columns:repeat(7,1fr);row-gap:4px;text-align:center;font-size:9.5px;font-weight:500;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.mg i{font-style:normal;line-height:16px;height:16px;border-radius:50%;position:relative}
+.mg i.has{color:var(--accent);font-weight:800}
+.mg i.has::after{content:"";position:absolute;left:50%;bottom:-3px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--accent)}
+.mg i.today{background:var(--give);color:#fff;font-weight:800}
+@media (max-width:360px){.yg{gap:10px 4px}.mg{font-size:8.5px}}
 /* ── 추가 ── */
 .form{display:grid;gap:18px;padding-top:6px}
 .fl{display:grid;gap:8px}
@@ -598,7 +620,7 @@ const AppKit = (() => {
 })();
 </script>
 <script>
-const BUILD = '1794566217';            // version.txt 와 같은 숫자 — scripts/bump_version.py 가 함께 바꾼다
+const BUILD = '1794566698';            // version.txt 와 같은 숫자 — scripts/bump_version.py 가 함께 바꾼다
 /* 화면 높이: 상태바가 default 인 홈 화면 앱에서는 innerHeight 가 이미 상태바를 뺀 높이다.
    키트의 fixViewport() 처럼 화면 전체와의 차이를 더하면 문서가 상태바 높이만큼 길어져
    탭바가 화면 아래로 밀려난다(아이폰 실기기에서 확인). 그래서 innerHeight 를 그대로 쓴다.
@@ -855,11 +877,36 @@ function openDetail(id) {
 }
 
 /* 달 고르기 (시트) */
+/* 달 고르기 (시트) — 아이폰 캘린더의 '연도' 보기처럼 해마다 열두 달을 작은 달력으로 보여 준다.
+   기록이 있는 날은 점, 오늘은 빨간 동그라미. 달을 누르면 그 달 기록만 본다. */
+function miniMonth(ym, days) {
+  const [y, m] = ym.split('-').map(Number);
+  const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  let cells = '<i></i>'.repeat(first);
+  for (let d = 1; d <= last; d++) {
+    const ds = `${ym}-${String(d).padStart(2, '0')}`;
+    cells += `<i class="${ds === TODAY ? 'today' : ''}${days.has(d) ? ' has' : ''}">${d}</i>`;
+  }
+  const n = S.recs.filter(r => r.date.startsWith(ym)).length;
+  const cur = ym === TODAY.slice(0, 7), on = S.month === ym;
+  return `<button type="button" class="ym${on ? ' on' : ''}${n ? '' : ' none'}" data-month="${ym}" aria-label="${y}년 ${m}월 ${n}건">
+    <b class="${cur ? 'cur' : ''}">${m}월${n ? `<small>${n}</small>` : ''}</b><span class="mg">${cells}</span></button>`;
+}
 function openMonths() {
-  const months = [...new Set(S.recs.map(r => r.date.slice(0, 7)))].sort().reverse();
-  $('#sheetBody').innerHTML = `<h2 style="margin:0 0 12px;font-size:19px">어느 달을 볼까요?</h2>
-    <div class="chips wrap"><button data-month="" class="${!S.month ? 'on' : ''}">전체 기간</button>${months.map(m => `<button data-month="${m}" class="${S.month === m ? 'on' : ''}">${m.slice(2, 4)}년 ${+m.slice(5)}월 · ${S.recs.filter(r => r.date.startsWith(m)).length}</button>`).join('')}</div>`;
+  const yNow = +TODAY.slice(0, 4), ys = S.recs.map(r => +r.date.slice(0, 4));
+  const yMax = Math.max(yNow, ...ys), yMin = Math.min(yNow, ...ys);
+  let html = `<div class="yv-top"><button type="button" class="chip-all${!S.month ? ' on' : ''}" data-month="">전체 기간 보기</button><span class="muted">기록 있는 날은 점으로 표시해요</span></div>`;
+  for (let y = yMax; y >= yMin; y--) {
+    const yr = S.recs.filter(r => r.date.startsWith(y + '-'));
+    html += `<section class="yv" id="yv-${y}"><h2 class="${y === yNow ? 'cur' : ''}">${y}년<small>${yr.length ? `${yr.length}건 · ${won(sum(yr))}` : '기록 없음'}</small></h2><div class="yg">` +
+      Array.from({ length: 12 }, (_, i) => { const ym = `${y}-${String(i + 1).padStart(2, '0')}`;
+        return miniMonth(ym, new Set(yr.filter(r => r.date.startsWith(ym)).map(r => +r.date.slice(8)))); }).join('') + '</div></section>';
+  }
+  $('#sheetBody').innerHTML = html;
   sheet.open();
+  /* 고른 달(없으면 올해)이 보이게 맞춘다 */
+  const tgt = S.month ? $(`[data-month="${S.month}"]`) : $('#yv-' + yNow);
+  requestAnimationFrame(() => { const body = $('#sheetBody'); if (tgt) body.scrollTop = tgt.offsetTop - body.offsetTop - 8; });
 }
 
 /* ── 추가·수정 ── */
