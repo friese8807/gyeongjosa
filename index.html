@@ -620,7 +620,7 @@ const AppKit = (() => {
 })();
 </script>
 <script>
-const BUILD = '1794566698';            // version.txt 와 같은 숫자 — scripts/bump_version.py 가 함께 바꾼다
+const BUILD = '1795060452';            // version.txt 와 같은 숫자 — scripts/bump_version.py 가 함께 바꾼다
 /* 화면 높이: 상태바가 default 인 홈 화면 앱에서는 innerHeight 가 이미 상태바를 뺀 높이다.
    키트의 fixViewport() 처럼 화면 전체와의 차이를 더하면 문서가 상태바 높이만큼 길어져
    탭바가 화면 아래로 밀려난다(아이폰 실기기에서 확인). 그래서 innerHeight 를 그대로 쓴다.
@@ -1021,7 +1021,7 @@ function viewSet() {
       <div style="padding:0 16px 14px" class="fl"><input class="inp" id="apiUrl" value="${esc(CFG.api)}" placeholder="Apps Script 웹 앱 주소 (…/exec)">
         <div class="btns" style="margin-top:4px"><button class="btn" data-act="saveApi">${CFG.api ? '주소 바꾸기' : '연결하기'}</button>${CFG.api ? '<button class="btn ghost" data-act="syncNow">지금 맞추기</button>' : ''}</div></div></div>
     <div class="grp"><h3>알림</h3>
-      <button class="item" data-act="cal"><span class="t"><b>다가오는 경조사 캘린더 등록</b><small>날짜가 오늘 뒤인 기록을 저장하면 구글 캘린더에 일정과 하루 전 알림을 넣어요.</small></span><span class="sw ${CFG.cal ? 'on' : ''}" data-sw="cal"></span></button></div>
+      <button class="item" data-act="cal"><span class="t"><b>다가오는 경조사 캘린더 등록</b><small>날짜가 오늘 뒤인 기록을 저장하면 구글 「개인할일」 캘린더에 일정과 하루 전 알림을 넣어요.</small></span><span class="sw ${CFG.cal ? 'on' : ''}" data-sw="cal"></span></button></div>
     <div class="grp"><h3>보안·화면</h3>
       <button class="item" data-act="pin"><span class="t"><b>암호 잠금</b><small>${CFG.pin ? '켜져 있어요. 누르면 끌 수 있어요.' : '앱을 열 때 숫자 4자리를 물어봐요.'}</small></span><span class="sw ${CFG.pin ? 'on' : ''}"></span></button>
       <div class="item" style="cursor:default"><span class="t"><b>화면 밝기</b></span><div class="seg">${[['auto', '자동'], ['light', '밝게'], ['dark', '어둡게']].map(([k, t]) => `<button data-theme="${k}" class="${CFG.theme === k ? 'on' : ''}">${t}</button>`).join('')}</div></div></div>

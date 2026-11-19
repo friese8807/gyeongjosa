@@ -13,6 +13,7 @@
  *  · 항목 : 앱의 [항목 관리] 목록(누구의·종류·사이·금액 버튼·표시)을 JSON 으로 저장.
  */
 const TZ = 'Asia/Seoul';
+const CAL_ID = 'flgud9n3n59heibq2kimn7lgjo@group.calendar.google.com';   // 「개인할일」 캘린더
 const HEAD = ['id', '날짜', '구분', '이름', '누구의', '종류', '금액', '나와의 사이', '표시', '연락처', '메모', '수정시각', '캘린더'];
 
 function doPost(e) {
@@ -103,7 +104,7 @@ function delOne_(id) {
   const sh = sheet_('기록'), row = findRow_(sh, id);
   if (!row) return;
   const ev = String(sh.getRange(row, 13).getValue() || '');
-  if (ev) { try { CalendarApp.getDefaultCalendar().getEventById(ev)?.deleteEvent(); } catch (e) {} }
+  if (ev) { try { findEvent_(ev)?.deleteEvent(); } catch (e) {} }
   sh.deleteRow(row);
 }
 function readCats_() {
@@ -111,16 +112,22 @@ function readCats_() {
   try { return v ? JSON.parse(v) : null; } catch (e) { return null; }
 }
 
-/* ── 구글 캘린더 ── 오늘 이후 경조사는 종일 일정 + 전날 오전 9시 알림 */
+/* ── 구글 캘린더 ── 오늘 이후 경조사는 「개인할일」 캘린더에 종일 일정 + 전날 오전 9시 알림 */
+function cal_() { return CalendarApp.getCalendarById(CAL_ID) || CalendarApp.getCalendarsByName('개인할일')[0] || CalendarApp.getDefaultCalendar(); }
+/* 예전에 기본 캘린더에 만든 일정도 찾아서 고치거나 지울 수 있게 두 곳을 다 본다 */
+function findEvent_(id) {
+  for (const c of [cal_(), CalendarApp.getDefaultCalendar()]) { try { const ev = c.getEventById(id); if (ev) return ev; } catch (e) {} }
+  return null;
+}
 function syncEvent_(r, evId) {
   const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
-  const calApp = CalendarApp.getDefaultCalendar();
-  let ev = null;
-  if (evId) { try { ev = calApp.getEventById(evId); } catch (e) {} }
+  const calApp = cal_();
+  let ev = evId ? findEvent_(evId) : null;
+  if (ev && ev.getOriginalCalendarId() !== calApp.getId()) { try { ev.deleteEvent(); } catch (e) {} ev = null; }   // 다른 캘린더에 있던 일정은 지우고 새로 만든다
   if (r.date < today) return ev ? ev.getId() : '';
   const [y, m, d] = r.date.split('-').map(Number);
   const day = new Date(y, m - 1, d);
-  const title = `[경조사] ${r.name} ${[r.who, r.type].filter(String).join(' ')}`;
+  const title = [r.type ? `[${r.type}]` : '[경조사]', r.name, r.who].filter(String).join(' ');
   const desc = [`${r.dir === 'recv' ? '받음' : '보냄'} ${Number(r.amount || 0).toLocaleString('ko-KR')}원`, r.phone, r.memo].filter(String).join('\n');
   if (ev) { ev.setTitle(title); ev.setAllDayDate(day); ev.setDescription(desc); }
   else { ev = calApp.createAllDayEvent(title, day, { description: desc }); }
@@ -129,4 +136,4 @@ function syncEvent_(r, evId) {
 }
 
 /* 처음 한 번 [실행]해 두면 권한 허용 창이 미리 떠서 배포가 수월하다 */
-function setup() { sheet_('기록'); sheet_('항목'); CalendarApp.getDefaultCalendar(); }
+function setup() { sheet_('기록'); sheet_('항목'); Logger.log('일정 넣을 캘린더: ' + cal_().getName()); }
