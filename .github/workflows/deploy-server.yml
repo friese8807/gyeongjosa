@@ -1,4 +1,4 @@
-# Apps Script 서버 자동 배포 (모든 앱 공통) — 저장소의 .github/workflows/deploy-server.yml 로 복사하고 env 세 줄만 채운다.
+# Apps Script 서버 자동 배포 (모든 앱 공통)  — 저장소의 .github/workflows/deploy-server.yml 로 복사하고 env 세 줄만 채운다.
 #  - 서버 코드(CODE)가 바뀌어 main 에 올라오면: 검사 → Apps Script 에 붙여 넣기 → 지금 쓰는 웹앱 배포에 새 버전 (앱 주소 그대로)
 #  - 저장소에 서버 코드가 아직 없으면: Apps Script 에서 가져와 CODE 로 저장소에 올린다 (배포는 하지 않음)
 #  - SCRIPT_ID 를 비워 두면 같은 구글 계정의 프로젝트 중에서 DEPLOY_ID 를 가진 것, 없으면 코드가 가장 비슷한 것을 찾아 알려 준다(이름은 출력하지 않음)
