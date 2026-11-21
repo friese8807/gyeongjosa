@@ -14,7 +14,7 @@ permissions:
   contents: write
 env:
   CODE: Code.gs        # 저장소 안 서버 코드 위치
-  SCRIPT_ID: ''        # Apps Script 프로젝트 설정 > 스크립트 ID (비우면 찾아 줌)
+  SCRIPT_ID: '1AJPe5lDYtmywAwe0OIYSp6geWmWitIxbTLAFW0Db-H8hDB_icT_5sAlI'      # Apps Script 프로젝트 설정 > 스크립트 ID (비우면 찾아 줌)
   DEPLOY_ID: ''      # 앱이 부르는 https://script.google.com/macros/s/○○○/exec 의 ○○○ (비우면 웹앱 배포가 하나일 때 그것)
 jobs:
   deploy:
