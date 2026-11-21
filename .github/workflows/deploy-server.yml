@@ -1,0 +1,75 @@
+# Apps Script 서버 자동 배포 (모든 앱 공통) — 저장소의 .github/workflows/deploy-server.yml 로 복사하고 env 세 줄만 채운다.
+#  - 서버 코드(CODE)가 바뀌어 main 에 올라오면: 검사 → Apps Script 에 붙여 넣기 → 지금 쓰는 웹앱 배포에 새 버전 (앱 주소 그대로)
+#  - 저장소에 서버 코드가 아직 없으면: Apps Script 에서 가져와 CODE 로 저장소에 올린다 (배포는 하지 않음)
+#  - SCRIPT_ID 를 비워 두면 같은 구글 계정의 프로젝트 중에서 DEPLOY_ID 를 가진 것, 없으면 코드가 가장 비슷한 것을 찾아 알려 준다(이름은 출력하지 않음)
+#  - 필요한 것: 저장소 비밀값 CLASPRC_JSON (npx @google/clasp@2.4.2 login 으로 만든 ~/.clasprc.json 내용). 없으면 실패가 아니라 안내만 남기고 끝낸다
+name: 서버 배포
+on:
+  push:
+    branches: [main]
+    paths: ['**/*.gs', '.github/workflows/deploy-server.yml']
+  workflow_dispatch:
+concurrency: server-deploy
+permissions:
+  contents: write
+env:
+  CODE: Code.gs        # 저장소 안 서버 코드 위치
+  SCRIPT_ID: ''        # Apps Script 프로젝트 설정 > 스크립트 ID (비우면 찾아 줌)
+  DEPLOY_ID: ''      # 앱이 부르는 https://script.google.com/macros/s/○○○/exec 의 ○○○ (비우면 웹앱 배포가 하나일 때 그것)
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: 배포
+        env:
+          CLASPRC: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          set -o pipefail
+          if [ -z "$CLASPRC" ]; then echo "::notice::비밀값 CLASPRC_JSON 이 아직 없어 배포를 건너뛰었어요"; exit 0; fi
+          printf '%s' "$CLASPRC" > ~/.clasprc.json; trap 'rm -f ~/.clasprc.json' EXIT
+          C="npx -y @google/clasp@2.4.2"; ROOT=$PWD
+          fns() { grep -oE '^(async )?function [A-Za-z0-9_$]+' "$1" | sort -u; }
+          # 1) 프로젝트 찾기
+          if [ -z "$SCRIPT_ID" ]; then
+            best=''; bs=0
+            for id in $($C list 2>/dev/null | grep -oE 'script.google.com/d/[A-Za-z0-9_-]+' | cut -d/ -f3); do
+              d=$(mktemp -d); (cd "$d" && printf '{"scriptId":"%s"}' "$id" > .clasp.json
+                if [ -n "$DEPLOY_ID" ]; then $C deployments 2>/dev/null | grep -q "$DEPLOY_ID" && echo hit > .hit
+                elif [ -f "$ROOT/$CODE" ]; then $C pull >/dev/null 2>&1; cat *.js 2>/dev/null > all.txt; fi)
+              if [ -f "$d/.hit" ]; then best=$id; break; fi
+              if [ -f "$d/all.txt" ]; then s=$(comm -12 <(fns "$ROOT/$CODE") <(fns "$d/all.txt") | wc -l); [ "$s" -gt "$bs" ] && { bs=$s; best=$id; }; fi
+            done
+            n=$(fns "$ROOT/$CODE" 2>/dev/null | wc -l)
+            [ -n "$best" ] && { [ -n "$DEPLOY_ID" ] || [ $((bs * 2)) -ge "$n" ]; } || { echo "::error::맞는 Apps Script 프로젝트를 찾지 못했어요(함수 일치 $bs/$n). SCRIPT_ID 를 적어 주세요"; exit 1; }
+            SCRIPT_ID=$best; echo "::notice::SCRIPT_ID=$SCRIPT_ID (찾은 값${n:+, 함수 일치 $bs/$n})"
+            # 코드 비교로 찾은 프로젝트에는 바로 덮어쓰지 않는다 — 사람이 확인하고 SCRIPT_ID 를 적은 뒤부터 배포
+            FOUND=1
+          fi
+          mkdir gas && cd gas && printf '{"scriptId":"%s"}' "$SCRIPT_ID" > .clasp.json
+          $C pull                                  # 설정 파일(appsscript.json)은 서버 것 그대로
+          main=$( [ -f Code.js ] && echo Code.js || ls -S *.js 2>/dev/null | head -1 )
+          [ -n "$main" ] || { echo "::error::서버 프로젝트에 코드 파일이 없어요"; exit 1; }
+          # 2) 저장소에 서버 코드가 없으면 가져오기만
+          if [ ! -f "$ROOT/$CODE" ]; then
+            mkdir -p "$(dirname "$ROOT/$CODE")"; cp "$main" "$ROOT/$CODE"; cd "$ROOT"
+            git config user.name "server-import"; git config user.email "actions@users.noreply.github.com"
+            git add "$CODE" && git commit -qm "서버 코드 가져오기 (Apps Script → $CODE)" && git push -q
+            echo "::notice::서버 코드를 저장소로 가져왔어요 ($CODE, $(wc -l < "$CODE")줄 · 파일 $(ls *.js 2>/dev/null | wc -l)개 중 $main)"; exit 0
+          fi
+          [ -n "$FOUND" ] && { echo "::notice::찾기만 했어요. SCRIPT_ID 를 워크플로에 적으면 다음부터 배포해요"; exit 0; }
+          # 3) 검사 → 붙여 넣기 → 새 버전 배포
+          node -e "new Function(require('fs').readFileSync('$ROOT/$CODE','utf8'))" || { echo "::error::$CODE 문법 오류 — 배포하지 않았어요"; exit 1; }
+          [ -f "$ROOT/tools/check.sh" ] && bash "$ROOT/tools/check.sh"
+          cp "$ROOT/$CODE" "$main"
+          P=$($C push -f 2>&1); echo "$P"; echo "$P" | grep -q Pushed || { echo "::error::붙여 넣기 실패: $(echo "$P" | tail -1)"; exit 1; }
+          if [ -z "$DEPLOY_ID" ]; then
+            L=$($C deployments 2>&1 | grep -oE 'AKfyc[A-Za-z0-9_-]+ @[0-9]+' | cut -d' ' -f1 | sort -u)
+            [ "$(echo "$L" | grep -c .)" = 1 ] || { echo "::error::웹앱 배포가 $(echo "$L" | grep -c .)개라 고를 수 없어요. DEPLOY_ID 를 적어 주세요: $(echo $L)"; exit 1; }
+            DEPLOY_ID=$L; echo "::notice::DEPLOY_ID=$DEPLOY_ID (찾은 값)"
+          fi
+          D=$($C deploy -i "$DEPLOY_ID" -d "자동 ${GITHUB_SHA::7}" 2>&1); echo "$D"
+          echo "$D" | grep -q "$DEPLOY_ID @" || { echo "::error::배포 실패: $(echo "$D" | tail -1)"; exit 1; }
+          echo "::notice::배포 완료 $(echo "$D" | grep -o '@[0-9]*') · $CODE $(wc -l < "$ROOT/$CODE")줄 · ${GITHUB_SHA::7}"
