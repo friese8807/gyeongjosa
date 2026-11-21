@@ -62,7 +62,8 @@ jobs:
           fi
           [ -n "$FOUND" ] && { echo "::notice::찾기만 했어요. SCRIPT_ID 를 워크플로에 적으면 다음부터 배포해요"; exit 0; }
           # 서버 코드가 이번에 바뀌지 않았으면(설정만 바뀜) 덮어쓰지 않고 서버와 같은지만 알려 준다 — 편집기에서 고친 내용을 지우지 않게
-          if [ "$GITHUB_EVENT_NAME" = push ] && git -C "$ROOT" diff --quiet HEAD~1 HEAD -- "$CODE" 2>/dev/null; then
+          # 커밋 메시지에 [배포] 가 있으면 코드가 안 바뀌어도 저장소 쪽으로 배포한다 (서버가 오래된 것을 확인했을 때)
+          if [ "$GITHUB_EVENT_NAME" = push ] && ! git -C "$ROOT" log -1 --format=%s | grep -q '\[배포\]' && git -C "$ROOT" diff --quiet HEAD~1 HEAD -- "$CODE" 2>/dev/null; then
             if cmp -s "$ROOT/$CODE" "$main"; then echo "::notice::서버 코드가 저장소와 같아요 · 배포할 것 없음"
             else echo "::warning::서버 코드가 저장소와 달라요(다른 줄 $(diff "$ROOT/$CODE" "$main" | grep -c '^[<>]')개) · 덮어쓰지 않고 서버 쪽을 server-snapshot 브랜치에 올려 뒀어요"
               cp "$main" "$ROOT/$CODE"; cd "$ROOT"; git config user.name "server-import"; git config user.email "actions@users.noreply.github.com"
