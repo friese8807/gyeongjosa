@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - name: 배포
@@ -38,7 +39,7 @@ jobs:
             for id in $($C list 2>/dev/null | grep -oE 'script.google.com/d/[A-Za-z0-9_-]+' | cut -d/ -f3); do
               d=$(mktemp -d); (cd "$d" && printf '{"scriptId":"%s"}' "$id" > .clasp.json
                 if [ -n "$DEPLOY_ID" ]; then $C deployments 2>/dev/null | grep -q "$DEPLOY_ID" && echo hit > .hit
-                elif [ -f "$ROOT/$CODE" ]; then $C pull >/dev/null 2>&1; cat *.js 2>/dev/null > all.txt; fi)
+                elif [ -f "$ROOT/$CODE" ]; then $C pull >/dev/null 2>&1; cat *.js 2>/dev/null > all.txt; fi) || true
               if [ -f "$d/.hit" ]; then best=$id; break; fi
               if [ -f "$d/all.txt" ]; then s=$(comm -12 <(fns "$ROOT/$CODE") <(fns "$d/all.txt") | wc -l); [ "$s" -gt "$bs" ] && { bs=$s; best=$id; }; fi
             done
@@ -60,6 +61,12 @@ jobs:
             echo "::notice::서버 코드를 저장소로 가져왔어요 ($CODE, $(wc -l < "$CODE")줄 · 파일 $(ls *.js 2>/dev/null | wc -l)개 중 $main)"; exit 0
           fi
           [ -n "$FOUND" ] && { echo "::notice::찾기만 했어요. SCRIPT_ID 를 워크플로에 적으면 다음부터 배포해요"; exit 0; }
+          # 서버 코드가 이번에 바뀌지 않았으면(설정만 바뀜) 덮어쓰지 않고 서버와 같은지만 알려 준다 — 편집기에서 고친 내용을 지우지 않게
+          if [ "$GITHUB_EVENT_NAME" = push ] && git -C "$ROOT" diff --quiet HEAD~1 HEAD -- "$CODE" 2>/dev/null; then
+            if cmp -s "$ROOT/$CODE" "$main"; then echo "::notice::서버 코드가 저장소와 같아요 · 배포할 것 없음"
+            else echo "::warning::서버 코드가 저장소와 달라요(다른 줄 $(diff "$ROOT/$CODE" "$main" | grep -c '^[<>]')개) · 덮어쓰지 않았어요"; fi
+            exit 0
+          fi
           # 3) 검사 → 붙여 넣기 → 새 버전 배포
           node -e "new Function(require('fs').readFileSync('$ROOT/$CODE','utf8'))" || { echo "::error::$CODE 문법 오류 — 배포하지 않았어요"; exit 1; }
           [ -f "$ROOT/tools/check.sh" ] && bash "$ROOT/tools/check.sh"
