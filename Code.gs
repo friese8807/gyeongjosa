@@ -60,9 +60,8 @@ function sheet_(name) {
   let sh = ss.getSheetByName(name);
   if (!sh) {
     sh = ss.insertSheet(name);
-    if (name === '기록') { sh.getRange(1, 1, 1, HEAD.length).setValues([HEAD]).setFontWeight('bold'); sh.setFrozenRows(1); }
+    if (name === '기록') { sh.getRange(1, 1, 1, HEAD.length).setValues([HEAD]).setFontWeight('bold'); sh.setFrozenRows(1); sh.getRange('B:B').setNumberFormat('@'); }   // 날짜를 글자로 두어 시간대 문제를 막는다
   }
-  if (name === '기록') sh.getRange('B:B').setNumberFormat('@');   // 날짜를 글자로 두어 시간대 문제를 막는다
   return sh;
 }
 const fmtDate_ = v => v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim().replace(/[./]/g, '-');

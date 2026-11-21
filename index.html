@@ -240,7 +240,9 @@ textarea.inp{resize:vertical;min-height:70px}
 .hint{font-size:13px;color:var(--accent);background:var(--accent-soft);border-radius:10px;padding:8px 12px;line-height:1.5}
 .cal{background:var(--solid);border:1px solid var(--line);border-radius:14px;padding:10px}
 .cal .hd{display:flex;align-items:center;justify-content:space-between;padding:0 2px 6px}
-.cal .hd b{font-size:16px}
+.cal .hd b{font-size:16px;position:relative}
+.cal .hd input{position:absolute;inset:0;opacity:0;width:100%;font-size:16px}
+body{word-break:keep-all;overflow-wrap:anywhere}
 .cal .g{display:grid;grid-template-columns:repeat(7,1fr);text-align:center}
 .cal .g span{font-size:12px;color:var(--muted);padding:4px 0}
 .cal .g button{border:0;background:none;color:var(--ink);font:inherit;font-size:16px;height:40px;border-radius:50%;cursor:pointer;font-variant-numeric:tabular-nums;position:relative}
@@ -268,7 +270,7 @@ textarea.inp{resize:vertical;min-height:70px}
 .sch{background:var(--solid);border:1px solid var(--line);border-radius:16px;overflow:hidden}
 .sch>div{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 14px}
 .sch>div+div{border-top:1px solid var(--line)}
-.sch .d{font-weight:800;font-size:15px;min-width:64px}
+.sch .d{font-weight:800;font-size:15px;width:76px}
 .sch .d small{display:block;font-weight:500;font-size:12px;color:var(--muted)}
 .sch .w{min-width:0}
 .sch .w b{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -325,7 +327,6 @@ textarea.inp{resize:vertical;min-height:70px}
 </style>
 </head>
 <body>
-<div class="ak-demo" id="demo" hidden>예시 데이터예요 · 설정에서 구글 시트를 연결하면 내 기록이 보여요</div>
 <div class="ak-boot"><div><img src="icon-180-v1.png" alt=""><p>불러오는 중…</p></div></div>
 <header class="ak-top" id="top"></header>
 <main id="sc"></main>
@@ -620,7 +621,7 @@ const AppKit = (() => {
 })();
 </script>
 <script>
-const BUILD = '1795060452';            // version.txt 와 같은 숫자 — scripts/bump_version.py 가 함께 바꾼다
+const BUILD = '1795279212';            // version.txt 와 같은 숫자 — scripts/bump_version.py 가 함께 바꾼다
 /* 화면 높이: 상태바가 default 인 홈 화면 앱에서는 innerHeight 가 이미 상태바를 뺀 높이다.
    키트의 fixViewport() 처럼 화면 전체와의 차이를 더하면 문서가 상태바 높이만큼 길어져
    탭바가 화면 아래로 밀려난다(아이폰 실기기에서 확인). 그래서 innerHeight 를 그대로 쓴다.
@@ -700,9 +701,8 @@ const S = {
   cats: Object.assign({}, DEF, LS.get('cats', {})),
   dir: LS.get('dir', 'all'), q: '', month: null,
   statTab: LS.get('statTab', 'sched'), statType: 'all', year: +TODAY.slice(0, 4),
-  draft: null, calOpen: false, calM: TODAY.slice(0, 7), lastOk: null,
+  draft: LS.get('draft', null), calOpen: false, calM: TODAY.slice(0, 7), lastOk: null,
 };
-$('#demo').hidden = !DEMO;
 
 /* ── 화면 색 (자동·밝게·어둡게) ── */
 function applyTheme() {
@@ -824,7 +824,7 @@ function filtered() {
 }
 const tagsTxt = r => (r.tags || []).map(t => '#' + esc(t)).join(' ');
 const soon = r => r.date > TODAY ? `<span class="soon">D-${dayDiff(r.date, TODAY)}</span>` : '';
-const amtTxt = r => r.amount ? (r.dir === 'give' ? '' : '') + won(r.amount) : esc((r.tags || []).find(t => ['선물', '화환', '상품권'].includes(t)) || '금액 없음');
+const amtTxt = r => r.amount ? won(r.amount) : esc((r.tags || []).find(t => ['선물', '화환', '상품권'].includes(t)) || '금액 없음');
 
 /* ── 내역 ── */
 function topList() {
@@ -855,7 +855,7 @@ function fillList() {
     const head = `<div class="mh"><b>${ym(k + '-01')}</b><span>${rs.length}건 · ${won(sum(rs))}</span></div>`;
     return head + `<div class="rowsA">` + rs.map(r => `<button class="rowA" data-open="${esc(r.id)}">
       <span class="dbox ${r.dir}"><b class="num">${+r.date.slice(8)}</b><i>${dow(r.date)}요일</i></span>
-      <span class="mid"><b>${esc(r.name)}${soon(r)}</b><span class="tag">${tagsTxt(r) || (r.grp ? esc(r.grp) : '')}</span></span>
+      <span class="mid"><b>${esc(r.name)}${soon(r)}</b><span class="tag">${[r.grp ? esc(r.grp) : '', tagsTxt(r)].filter(Boolean).join(' · ')}</span></span>
       <span class="end"><small>${esc(what(r))}</small><span class="amt ${r.dir}">${amtTxt(r)}</span></span></button>`).join('') + `</div>`;
   }).join('');
 }
@@ -876,7 +876,6 @@ function openDetail(id) {
   sheet.open();
 }
 
-/* 달 고르기 (시트) */
 /* 달 고르기 (시트) — 아이폰 캘린더의 '연도' 보기처럼 해마다 열두 달을 작은 달력으로 보여 준다.
    기록이 있는 날은 점, 오늘은 빨간 동그라미. 달을 누르면 그 달 기록만 본다. */
 function miniMonth(ym, days) {
@@ -922,7 +921,7 @@ function viewAdd() {
   const names = [...new Set(S.recs.map(r => r.name))];
   return `<form class="form" id="form" autocomplete="off">
     <div class="fl"><span class="lb">날짜</span>
-      <button type="button" class="dateBtn" data-act="cal"><span class="num">${d.date.slice(0, 4)}년 ${md(d.date)} (${dow(d.date)})</span><span class="muted" style="font-size:14px;font-weight:600">${d.date === TODAY ? '오늘' : d.date > TODAY ? 'D-' + dayDiff(d.date, TODAY) : dayDiff(TODAY, d.date) + '일 전'} ▾</span></button>
+      <button type="button" class="dateBtn" data-act="cal"><span class="num">${d.date.slice(0, 4)}년 ${md(d.date)} (${dow(d.date)})</span><span class="muted" style="font-size:14px;font-weight:600">${d.date === TODAY ? '오늘' : d.date > TODAY ? 'D-' + dayDiff(d.date, TODAY) : (dayDiff(TODAY, d.date) >= 365 ? Math.floor(dayDiff(TODAY, d.date) / 365) + '년 전' : dayDiff(TODAY, d.date) + '일 전')} ▾</span></button>
       <div id="cal">${S.calOpen ? calHTML() : ''}</div></div>
     <div class="fl"><label for="fName">이름 <span style="font-weight:500">(누구의 경조사인지)</span></label>
       <input class="inp" id="fName" name="name" list="names" value="${esc(d.name)}" placeholder="예: 홍길동" required>
@@ -949,11 +948,16 @@ function calHTML() {
     const ds = `${S.calM}-${String(i).padStart(2, '0')}`;
     cells += `<button type="button" data-day="${ds}" class="${ds === S.draft.date ? 'on' : ''}${ds === TODAY ? ' t' : ''}${has.has(i) ? ' has' : ''}${(first + i - 1) % 7 ? '' : ' sun'}">${i}</button>`;
   }
-  return `<div class="cal" data-noswipe><div class="hd"><button type="button" class="icbtn" data-calm="-1" aria-label="이전 달">‹</button><b>${y}년 ${m}월</b><button type="button" class="icbtn" data-calm="1" aria-label="다음 달">›</button></div><div class="g">${cells}</div></div>`;
+  return `<div class="cal" data-noswipe><div class="hd"><button type="button" class="icbtn" data-calm="-1" aria-label="이전 달">‹</button><b>${y}년 ${m}월 ▾<input type="month" id="calPick" value="${S.calM}" aria-label="연도와 달 고르기"></b><button type="button" class="icbtn" data-calm="1" aria-label="다음 달">›</button></div><div class="g">${cells}</div></div>`;
 }
 function nameHint() {
   const el = $('#nameHint'); if (!el) return;
   const n = S.draft.name.trim(); const rs = n ? S.recs.filter(r => r.name === n && r.id !== S.draft.id).sort((a, b) => b.date.localeCompare(a.date)) : [];
+  if (rs.length && !S.draft.id) {
+    const last = rs.find(r => r.phone)?.phone, g = rs.find(r => r.grp)?.grp;
+    if (last && !$('#fPhone').value) { $('#fPhone').value = last; S.draft.phone = last; }
+    if (g && !S.draft.grp) { S.draft.grp = g; document.querySelectorAll('[data-chips="grp"] button').forEach(b => b.classList.toggle('on', b.dataset.chip === g)); }
+  }
   el.innerHTML = rs.length ? `<div class="hint">${esc(n)} 님과의 기록 ${rs.length}건 · 최근 ${rs[0].date.slice(2).replace(/-/g, '.')} ${esc(what(rs[0]))} ${rs[0].dir === 'give' ? '보냄' : '받음'} ${amtTxt(rs[0])}<br>보낸 돈 ${won(sum(rs.filter(r => r.dir === 'give')))} · 받은 돈 ${won(sum(rs.filter(r => r.dir === 'recv')))}</div>` : '';
 }
 function readForm() {
@@ -1049,6 +1053,7 @@ const tabs = AppKit.tabs({
 /* ── 누르기 (data-* 하나로 처리) ── */
 document.addEventListener('click', async e => {
   const t = e.target.closest('button,[data-open]'); if (!t) return;
+  if (t.closest('#form')) setTimeout(() => S.draft && LS.set('draft', S.draft));
   const ds = t.dataset;
   if (ds.dir) { S.dir = ds.dir; LS.set('dir', S.dir); document.querySelectorAll('[data-dir]').forEach(b => b.classList.toggle('on', b === t)); fillList(); return; }
   if (ds.open) { openDetail(ds.open); return; }
@@ -1068,7 +1073,7 @@ document.addEventListener('click', async e => {
     const inp = { who: '#fWho', type: '#fType' }[box]; if (inp) $(inp).value = '';
     return;
   }
-  if (ds.amt != null) { const f = $('#fAmt'), cur = parseInt((f.value || '').replace(/[^0-9]/g, ''), 10) || 0; f.value = +ds.amt ? num(cur + +ds.amt) : ''; AppKit.buzz(); return; }
+  if (ds.amt != null) { const f = $('#fAmt'), cur = parseInt((f.value || '').replace(/[^0-9]/g, ''), 10) || 0; f.value = +ds.amt ? num(cur + +ds.amt) : ''; S.draft.amount = parseInt(f.value.replace(/[^0-9]/g, ''), 10) || 0; AppKit.buzz(); return; }
   if (ds.day) { readForm(); S.draft.date = ds.day; S.calOpen = false; draw(); return; }
   if (ds.calm) { const [y, m] = S.calM.split('-').map(Number), dt = new Date(Date.UTC(y, m - 1 + +ds.calm, 1)); S.calM = dt.toISOString().slice(0, 7); $('#cal').innerHTML = calHTML(); return; }
   if (ds.stab) { S.statTab = ds.stab; LS.set('statTab', S.statTab); draw(); return; }
@@ -1094,7 +1099,7 @@ document.addEventListener('click', async e => {
     case 'refresh': if (DEMO) AppKit.toast('예시를 보는 중이에요. 설정에서 구글 시트를 연결해 주세요.'); else refresh(); break;
     case 'cal': if (tabs.current === 'add') { readForm(); S.calOpen = !S.calOpen; S.calM = S.draft.date.slice(0, 7); $('#cal').innerHTML = S.calOpen ? calHTML() : ''; }
       else { CFG.cal = !CFG.cal; saveCfg(); t.querySelector('.sw').classList.toggle('on', CFG.cal); AppKit.toast(CFG.cal ? '다가오는 경조사를 캘린더에 넣을게요' : '캘린더에 넣지 않을게요'); } break;
-    case 'reset': S.draft = blank(); S.calOpen = false; draw(); break;
+    case 'reset': { const wasEdit = !!S.draft?.id; S.draft = blank(); S.calOpen = false; LS.set('draft', null); if (wasEdit) tabs.go('list'); else draw(); break; }
     case 'saveApi': {
       const u = $('#apiUrl').value.trim();
       if (u && !/^https:\/\/script\.google\.com\/.+\/exec/.test(u)) { AppKit.toast('…/exec 로 끝나는 Apps Script 주소를 넣어 주세요'); break; }
@@ -1111,7 +1116,9 @@ document.addEventListener('click', async e => {
 /* 입력 */
 document.addEventListener('input', e => {
   if (e.target.id === 'q') { S.q = e.target.value; fillList(); }
-  if (e.target.id === 'fName') { S.draft.name = e.target.value; nameHint(); }
+  if (e.target.closest('#form')) { readForm(); LS.set('draft', S.draft); }   // 탭을 옮기거나 앱이 다시 열려도 쓰던 내용이 남게
+  if (e.target.id === 'fName') nameHint();
+  if (e.target.id === 'calPick' && e.target.value) { S.calM = e.target.value; $('#cal').innerHTML = calHTML(); }
   if (e.target.id === 'fAmt') { const v = e.target.value.replace(/[^0-9]/g, ''); e.target.value = v ? num(+v) : ''; }
   if (e.target.id === 'fWho' || e.target.id === 'fType') {
     const key = e.target.id === 'fWho' ? 'who' : 'type';
@@ -1129,7 +1136,7 @@ document.addEventListener('submit', async e => {
   finally { btn.disabled = false; }
   AppKit.toast(isNew ? `${d.name} 님 기록을 저장했어요` : '고쳤어요');
   S.draft = isNew ? Object.assign(blank(), { dir: d.dir, date: d.date }) : null;
-  S.calOpen = false;
+  S.calOpen = false; LS.set('draft', S.draft);
   if (isNew) draw(); else tabs.go('list');
 });
 
@@ -1167,10 +1174,13 @@ $('#fileIn').addEventListener('change', async e => {
     return { id: uid(), dir: /받/.test(g(r, '구분')) ? 'recv' : 'give', date: dt, name: g(r, '이름'), who: g(r, '누구의'), type: g(r, '종류'),
       amount: parseInt(g(r, '금액').replace(/[^0-9]/g, ''), 10) || 0, grp: g(r, '나와의 사이'), tags: g(r, '표시').split(/[\s,#]+/).filter(Boolean), phone: g(r, '연락처'), memo: g(r, '메모'), upd: Date.now() };
   }).filter(r => r && r.name);
-  if (!add.length) { AppKit.toast('넣을 기록을 찾지 못했어요'); return; }
+  const key = r => [r.date, r.dir, r.name, r.amount].join('|'), have = new Set(S.recs.map(key));
+  const add2 = add.filter(r => !have.has(key(r)) && have.add(key(r))), dup = add.length - add2.length;   // 같은 파일을 두 번 넣어도 겹치지 않게
+  add.splice(0, add.length, ...add2);
+  if (!add.length) { AppKit.toast(dup ? `${dup}건 모두 이미 있는 기록이에요` : '넣을 기록을 찾지 못했어요'); return; }
   S.recs = S.recs.concat(add); persist();
   if (!DEMO) { try { await api('bulk', { recs: add }); } catch (err) { add.forEach(r => enqueue({ op: 'save', rec: r })); } }
-  draw(); AppKit.toast(`${add.length}건을 불러왔어요`);
+  draw(); AppKit.toast(`${add.length}건을 불러왔어요${dup ? ` (겹치는 ${dup}건은 뺐어요)` : ''}`);
 });
 
 /* ── 암호 잠금 ── 숫자 4자리를 해시로만 저장한다 (이 휴대폰 안에서만) */
@@ -1206,6 +1216,7 @@ $('#lockPad').addEventListener('click', async e => {
 });
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && AppKit.kstDate() !== TODAY && tabs.current !== 'add') return location.reload();   // 며칠 켜 둔 앱도 D-day·오늘이 맞게
   if (document.hidden) hiddenAt = Date.now();
   else if (CFG.pin && hiddenAt && Date.now() - hiddenAt > 60000) lockShow('unlock');   // 1분 넘게 다른 앱에 있다 돌아오면 다시 잠근다
 });
