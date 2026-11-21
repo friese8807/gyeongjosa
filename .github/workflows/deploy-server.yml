@@ -43,7 +43,7 @@ jobs:
               if [ -f "$d/.hit" ]; then best=$id; break; fi
               if [ -f "$d/all.txt" ]; then s=$(comm -12 <(fns "$ROOT/$CODE") <(fns "$d/all.txt") | wc -l); [ "$s" -gt "$bs" ] && { bs=$s; best=$id; }; fi
             done
-            n=$(fns "$ROOT/$CODE" 2>/dev/null | wc -l)
+            n=0; [ -f "$ROOT/$CODE" ] && n=$(fns "$ROOT/$CODE" | wc -l)
             [ -n "$best" ] && { [ -n "$DEPLOY_ID" ] || [ $((bs * 2)) -ge "$n" ]; } || { echo "::error::맞는 Apps Script 프로젝트를 찾지 못했어요(함수 일치 $bs/$n). SCRIPT_ID 를 적어 주세요"; exit 1; }
             SCRIPT_ID=$best; echo "::notice::SCRIPT_ID=$SCRIPT_ID (찾은 값${n:+, 함수 일치 $bs/$n})"
             # 코드 비교로 찾은 프로젝트에는 바로 덮어쓰지 않는다 — 사람이 확인하고 SCRIPT_ID 를 적은 뒤부터 배포
@@ -64,7 +64,9 @@ jobs:
           # 서버 코드가 이번에 바뀌지 않았으면(설정만 바뀜) 덮어쓰지 않고 서버와 같은지만 알려 준다 — 편집기에서 고친 내용을 지우지 않게
           if [ "$GITHUB_EVENT_NAME" = push ] && git -C "$ROOT" diff --quiet HEAD~1 HEAD -- "$CODE" 2>/dev/null; then
             if cmp -s "$ROOT/$CODE" "$main"; then echo "::notice::서버 코드가 저장소와 같아요 · 배포할 것 없음"
-            else echo "::warning::서버 코드가 저장소와 달라요(다른 줄 $(diff "$ROOT/$CODE" "$main" | grep -c '^[<>]')개) · 덮어쓰지 않았어요"; fi
+            else echo "::warning::서버 코드가 저장소와 달라요(다른 줄 $(diff "$ROOT/$CODE" "$main" | grep -c '^[<>]')개) · 덮어쓰지 않고 서버 쪽을 server-snapshot 브랜치에 올려 뒀어요"
+              cp "$main" "$ROOT/$CODE"; cd "$ROOT"; git config user.name "server-import"; git config user.email "actions@users.noreply.github.com"
+              git checkout -q -B server-snapshot && git commit -qam "서버(Apps Script)에 있는 코드" && git push -qf origin server-snapshot; fi
             exit 0
           fi
           # 3) 검사 → 붙여 넣기 → 새 버전 배포
