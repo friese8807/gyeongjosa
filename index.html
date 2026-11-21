@@ -234,6 +234,8 @@ textarea.inp{resize:vertical;min-height:70px}
 .dateBtn{display:flex;align-items:center;justify-content:space-between;width:100%;border:1px solid var(--line);background:var(--solid);color:var(--ink);border-radius:12px;padding:12px 14px;font:inherit;font-size:16px;font-weight:700;cursor:pointer}
 .chips{display:flex;gap:6px;padding-bottom:2px}
 .chips.wrap{flex-wrap:wrap}
+.chips.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}   /* 누구의·종류·사이: 4칸 바둑판으로 모두 보이게 */
+.chips.grid button{border-radius:12px;padding:8px 2px;font-size:14px}
 .chips button{flex:none;border:1px solid var(--line);background:var(--solid);color:var(--ink);font:inherit;font-size:14.5px;font-weight:600;border-radius:999px;padding:8px 14px;cursor:pointer;min-height:38px}
 .chips button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .chips.amts button{background:var(--accent-soft);color:var(--accent);border-color:transparent}
@@ -621,7 +623,7 @@ const AppKit = (() => {
 })();
 </script>
 <script>
-const BUILD = '1795279212';            // version.txt 와 같은 숫자 — scripts/bump_version.py 가 함께 바꾼다
+const BUILD = '1795279864';            // version.txt 와 같은 숫자 — scripts/bump_version.py 가 함께 바꾼다
 /* 화면 높이: 상태바가 default 인 홈 화면 앱에서는 innerHeight 가 이미 상태바를 뺀 높이다.
    키트의 fixViewport() 처럼 화면 전체와의 차이를 더하면 문서가 상태바 높이만큼 길어져
    탭바가 화면 아래로 밀려난다(아이폰 실기기에서 확인). 그래서 innerHeight 를 그대로 쓴다.
@@ -915,7 +917,7 @@ function topAdd() {
   return `<h1 class="ttl">${d.id ? '기록 수정' : '기록 추가'}</h1>
     <div class="seg">${[['give', '보냄'], ['recv', '받음']].map(([k, t]) => `<button data-fdir="${k}" class="${d.dir === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
 }
-const chipRow = (key, list, cur, multi) => `<div class="chips ak-hscroll" data-noswipe data-chips="${key}">${list.map(v => `<button type="button" data-chip="${esc(v)}" class="${(multi ? cur.includes(v) : cur === v) ? 'on' : ''}">${esc(v)}</button>`).join('')}</div>`;
+const chipRow = (key, list, cur, multi) => `<div class="chips grid" data-noswipe data-chips="${key}">${list.map(v => `<button type="button" data-chip="${esc(v)}" class="${(multi ? cur.includes(v) : cur === v) ? 'on' : ''}">${esc(v)}</button>`).join('')}</div>`;
 function viewAdd() {
   const d = S.draft;
   const names = [...new Set(S.recs.map(r => r.name))];
